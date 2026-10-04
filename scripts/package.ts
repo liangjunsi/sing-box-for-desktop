@@ -27,9 +27,11 @@ const signingConfigurationPath = path.join(
 const developmentPackage = process.argv[2] === "dev";
 const packageModeArgumentIndex = developmentPackage ? 3 : 2;
 const packageMode = process.argv[packageModeArgumentIndex] ?? "win";
-const packageArguments = process.argv
-  .slice(packageModeArgumentIndex + 1)
-  .filter((argument) => argument !== "--");
+const rawPackageArguments = process.argv.slice(packageModeArgumentIndex + 1);
+const unsignedPackage = rawPackageArguments.includes("--unsigned");
+const packageArguments = rawPackageArguments.filter(
+  (argument) => argument !== "--" && argument !== "--unsigned",
+);
 
 const sourceDateEpoch = configureReproducibleBuild([
   repositoryRoot,
@@ -261,9 +263,9 @@ function readWindowsSigningConfiguration(): WindowsSigningConfiguration {
 async function runWindowsElectronBuilder(
   architecture: Arch,
   artifactArchitecture: string,
-  signingConfiguration: WindowsSigningConfiguration,
+  signingConfiguration?: WindowsSigningConfiguration,
 ): Promise<void> {
-  const artifactName = `SFW-\${version}-${artifactArchitecture}${developmentPackage ? "-dev" : ""}.\${ext}`;
+  const artifactName = `SFW-\${version}-${artifactArchitecture}${developmentPackage ? "-dev" : ""}${unsignedPackage ? "-unsigned" : ""}.\${ext}`;
   const unpackedDirectory = {
     x64: "win-unpacked",
     x86: "win-ia32-unpacked",
@@ -291,16 +293,22 @@ async function runWindowsElectronBuilder(
       targets: Platform.WINDOWS.createTarget("nsis", architecture),
       publish: "never",
       config: {
+        ...(unsignedPackage ? { afterPack: async () => {} } : {}),
         compression: developmentPackage ? "store" : undefined,
         extends: path.join(repositoryRoot, "electron-builder.yml"),
         extraMetadata: { version: readApplicationVersion() },
         npmRebuild: false,
         win: {
           artifactName,
-          signtoolOptions: {
-            certificateFile: signingConfiguration.certificateFile,
-            certificatePassword: signingConfiguration.certificatePassword,
-          },
+          forceCodeSigning: !unsignedPackage,
+          ...(signingConfiguration
+            ? {
+                signtoolOptions: {
+                  certificateFile: signingConfiguration.certificateFile,
+                  certificatePassword: signingConfiguration.certificatePassword,
+                },
+              }
+            : {}),
         },
         nsis: { artifactName, warningsAsErrors: false },
       },
@@ -387,7 +395,9 @@ async function packageWindowsArchitecture(artifactArchitecture: string) {
       architecture.portableExecutableMachine,
     );
   }
-  const signingConfiguration = readWindowsSigningConfiguration();
+  const signingConfiguration = unsignedPackage
+    ? undefined
+    : readWindowsSigningConfiguration();
   const startedAt = Date.now();
   console.info(`[package:${artifactArchitecture}] electron-builder started`);
   await runWindowsElectronBuilder(
@@ -499,6 +509,7 @@ async function packageWindows() {
           ...(developmentPackage ? ["dev"] : []),
           "win-architecture",
           architecture.artifactArchitecture,
+          ...(unsignedPackage ? ["--unsigned"] : []),
         ],
         buildEnvironment,
       ),
@@ -581,6 +592,15 @@ async function packageLinux() {
 }
 
 async function main(): Promise<void> {
+  if (unsignedPackage) {
+    if (packageMode !== "win" && packageMode !== "win-architecture") {
+      throw new Error("--unsigned is only supported for Windows packages");
+    }
+    if (process.env.CSC_LINK || process.env.WIN_CSC_LINK) {
+      throw new Error("Unset CSC_LINK and WIN_CSC_LINK for unsigned packaging");
+    }
+    process.env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
+  }
   console.info(`[package] SOURCE_DATE_EPOCH=${sourceDateEpoch}`);
   verifyGoVersion();
   if (packageMode !== "win-architecture") {

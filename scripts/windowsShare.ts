@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { sync as spawnSync } from "cross-spawn";
+import { ensureWindowsArm64Toolchain } from "./windowsArm64Toolchain";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -99,7 +100,8 @@ function cargoEnvironment(
   const environment: NodeJS.ProcessEnv = {
     ...process.env,
     CARGO_TARGET_DIR: cargoTargetDirectory,
-    [cargoVariable(target, "RUSTFLAGS")]: rustFlags.join(" "),
+    CARGO_ENCODED_RUSTFLAGS: rustFlags.join("\u001f"),
+    [cargoVariable(target, "RUSTFLAGS")]: "",
   };
   if (linker !== undefined) {
     environment[cargoVariable(target, "LINKER")] = linker;
@@ -261,12 +263,21 @@ function crossCompile(
   );
 }
 
-function buildOnWindows(
+async function buildOnWindows(
   architecture: WindowsArchitecture,
   outputPath: string,
 ) {
   const target = architectures[architecture].rustTarget;
   ensureRustTarget(target);
+  if (architecture === "arm64" && process.arch === "x64") {
+    const { sdk, linker } = await ensureWindowsArm64Toolchain();
+    buildWithCargo(target, outputPath, cargoEnvironment(target, [
+      "-Ctarget-feature=+crt-static", "-Clink-arg=/Brepro", "-Clink-arg=/ignore:4099",
+      ...["crt/lib/aarch64", "sdk/lib/ucrt/aarch64", "sdk/lib/um/aarch64"]
+        .map((directory) => `-Lnative=${path.join(sdk, directory)}`),
+    ], linker));
+    return;
+  }
   buildWithCargo(
     target,
     outputPath,
@@ -286,7 +297,7 @@ export async function buildWindowsShareModule(
   }
   const supportedArchitecture = architecture as WindowsArchitecture;
   if (process.platform === "win32") {
-    buildOnWindows(supportedArchitecture, outputPath);
+    await buildOnWindows(supportedArchitecture, outputPath);
   } else {
     crossCompile(supportedArchitecture, outputPath);
   }

@@ -15,7 +15,7 @@ function contentSecurityPolicy(): Plugin {
     },
     transformIndexHtml(html) {
       const inlineScriptSources = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
-        ([, body]) => `'sha256-${createHash("sha256").update(body).digest("base64")}'`,
+        ([, body]) => `'sha256-${createHash("sha256").update(body.replace(/\r\n?/g, "\n")).digest("base64")}'`,
       );
       const scriptSource = development
         ? "'self' 'unsafe-inline'"

@@ -21,14 +21,15 @@ if (process.platform === "win32" && app.isPackaged) {
       : process.platform === "linux"
         ? "/run/sing-box.socket"
         : null;
-  const socketPath = developmentSwitchValue("daemon-socket") || defaultSocketPath;
-  if (!socketPath) {
+  const socketPath = developmentSwitchValue("daemon-socket") || defaultSocketPath || "";
+  const daemonAddress = developmentSwitchValue("daemon-address");
+  if (!socketPath && !daemonAddress) {
     daemonTransport = null;
   } else {
     daemonTransport = createGrpcTransport({
-      baseUrl: "http://sing-box",
+      baseUrl: daemonAddress || "http://sing-box",
       interceptors: [localeInterceptor],
-      nodeOptions: {
+      nodeOptions: daemonAddress ? undefined : {
         createConnection: () => net.connect({ path: socketPath }),
       },
     });

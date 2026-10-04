@@ -23,6 +23,8 @@
   "include": [
     "electron.vite.config.ts",
     "scripts",
+    "src/custom/subscription",
+    "src/custom/desktop/*.ts",
     "src/main",
     "src/preload",
     "src/shared",

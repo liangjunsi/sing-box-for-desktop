@@ -1,4 +1,5 @@
 import { Menu, Tray, app, nativeImage, screen } from "electron";
+import { showCustomTrayMenu } from "../custom/desktop/runtime";
 import type { MenuItemConstructorOptions, NativeImage, Rectangle } from "electron";
 
 import { ServiceStatus_Type } from "../shared/gen/daemon/started_service_pb";
@@ -202,6 +203,7 @@ function createElectronTray() {
   if (process.platform === "win32") {
     prepareTrayMenuWindow(tray.getBounds());
     const popMenu = (bounds: Rectangle) => {
+      if (showCustomTrayMenu(bounds)) return;
       void showTrayMenu(bounds);
     };
     tray.on("click", (_event, bounds) => popMenu(bounds));

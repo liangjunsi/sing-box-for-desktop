@@ -54,6 +54,7 @@ export interface DaemonBridge {
 
 export const PROFILES_CALL = "profiles:call";
 export const PROFILES_CHANGED = "profiles:changed";
+export const SUBSCRIPTION_WARNING = "subscription:warning";
 export const SERVERS_CALL = "servers:call";
 export const PREFERENCES_CALL = "preferences:call";
 export const PREFERENCES_CHANGED = "preferences:changed";
@@ -437,6 +438,8 @@ export interface AppBridge {
 }
 
 export interface DesktopBridge {
+  onSubscriptionWarning(listener: (message: string) => void): () => void;
+  custom: import("../custom/desktop/contracts").CustomBridge;
   platform: string;
   daemon: DaemonBridge;
   setup: SetupBridge;

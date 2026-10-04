@@ -22,5 +22,5 @@
       "@shared/*": ["./src/shared/*"]
     }
   },
-  "include": ["src/renderer/src", "src/shared", "dashboard/src"]
+  "include": ["src/renderer/src", "src/shared", "src/custom/desktop/*.tsx", "src/custom/desktop/contracts.ts", "dashboard/src"]
 }

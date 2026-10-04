@@ -19,6 +19,7 @@ import { desktopService } from "./daemon";
 import { Preference, settingsDatabase } from "./database";
 import { serviceStartOptions } from "./settings";
 import { userAgent } from "./userAgent";
+import { normalizeRemoteSubscription } from "../custom/subscription/remote";
 import { applicationService } from "./worker";
 import { daemonState } from "./state";
 
@@ -202,7 +203,7 @@ async function readLimitedResponse(
 // Mirrors libbox's HTTPClient (experimental/libbox/http.go): SetURL turns
 // URL userinfo into a basic Authorization header, and Execute accepts only
 // HTTP 200, reporting other statuses as "HTTP <Status>: <body>".
-async function fetchRemoteContent(remoteUrl: string): Promise<string> {
+export async function fetchRemoteContent(remoteUrl: string, onSkipped?: (count: number) => void): Promise<string> {
   const requestUrl = new URL(remoteUrl);
   const headers = new Headers({ "User-Agent": userAgent() });
   if (requestUrl.username !== "" || requestUrl.password !== "") {
@@ -233,7 +234,7 @@ async function fetchRemoteContent(remoteUrl: string): Promise<string> {
     }
     throw new Error(`HTTP ${status}: ${body}`);
   }
-  return await readLimitedResponse(response, MAXIMUM_REMOTE_PROFILE_BYTES);
+  return normalizeRemoteSubscription(await readLimitedResponse(response, MAXIMUM_REMOTE_PROFILE_BYTES), remoteUrl, onSkipped);
 }
 
 async function insertProfile(
@@ -329,7 +330,7 @@ async function encodeProfileData(id: string): Promise<Uint8Array> {
   return encoded.data;
 }
 
-async function startServiceWithContent(content: string): Promise<void> {
+export async function startServiceWithContent(content: string): Promise<void> {
   if (desktopService === null) {
     throw new Error("daemon is not available");
   }
@@ -684,6 +685,13 @@ const handlers: Record<
     return await encodeProfileData(id);
   },
 };
+
+// Narrow integration seam for the custom account adapter; the original IPC stays unchanged.
+export async function callProfileOperation<T>(method: string, ...args: unknown[]): Promise<T> {
+  const handler = handlers[method];
+  if (!handler) throw new Error("unknown profile operation");
+  return await handler(...(args as never[])) as T;
+}
 
 export function registerProfiles() {
   ipcMain.handle(

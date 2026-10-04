@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { ApplicationService } from "../shared/gen/experimental/boxdd/desktop_service_pb";
 import { localeInterceptor } from "./locale";
 import { daemonBinaryPath } from "./repair";
+import { developmentSwitchValue } from "./development";
 
 // A plain stdio transport (HTTP/2 over the child's standard streams) was
 // rejected: Node wraps a non-socket duplex in JSStreamSocket, which delivers
@@ -145,7 +146,11 @@ async function workerConnection(): Promise<WorkerProcess> {
   return currentWorker;
 }
 
-export const workerTransport: Transport = {
+const developmentAddress = developmentSwitchValue("daemon-address");
+export const workerTransport: Transport = developmentAddress ? createGrpcTransport({
+  baseUrl: developmentAddress,
+  interceptors: [localeInterceptor],
+}) : {
   unary: async (method, signal, timeoutMs, header, message, contextValues) => {
     const worker = await workerConnection();
     try {

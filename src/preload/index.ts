@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
+import { customBridge } from "../custom/desktop/preload";
 import type { IpcRendererEvent } from "electron";
 
 import {
@@ -28,6 +29,7 @@ import {
   PROFILE_FILE_IMPORT,
   PROFILES_CALL,
   PROFILES_CHANGED,
+  SUBSCRIPTION_WARNING,
   REPORTS_CALL,
   SERVERS_CALL,
   SETTINGS_CALL,
@@ -106,6 +108,12 @@ ipcRenderer.on(UPDATES_PRESENT, () => {
 });
 
 const bridge: DesktopBridge = {
+  onSubscriptionWarning: (listener) => {
+    const handler = (_event: IpcRendererEvent, message: string) => listener(message);
+    ipcRenderer.on(SUBSCRIPTION_WARNING, handler);
+    return () => ipcRenderer.removeListener(SUBSCRIPTION_WARNING, handler);
+  },
+  custom: customBridge,
   platform: process.platform,
   daemon: {
     unary: (service, method, header, request) =>

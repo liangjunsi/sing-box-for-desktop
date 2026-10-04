@@ -35,14 +35,14 @@ import { registerPreferences } from "./preferences";
 import { registerOpenConnectBrowser } from "./openConnectBrowser";
 import { registerProfileEditorWindows } from "./profileEditorWindows";
 import { registerProfiles } from "./profiles";
+import { registerCustomDesktop } from "../custom/desktop/runtime";
+import { attachCompactWindow, compactWindowOptions, openAdvancedWindow, isAdvancedWindow } from "../custom/desktop/windows";
 import { registerSetup } from "./repair";
 import { registerReports } from "./reports";
 import { resourcePath } from "./resources";
 import { registerServers } from "./servers";
 import {
   registerSettings,
-  saveMainWindowState,
-  storedMainWindowState,
   trayEnabled,
   trayInBackground,
 } from "./settings";
@@ -52,12 +52,7 @@ import { initializeTray, updateTrayVisibility } from "./tray";
 import { registerUpdates, runStartupUpdateCheck } from "./updates";
 import { prepareTrayMenuWindow, showTrayMenu } from "./trayMenu";
 import { registerTerminalWindows } from "./terminalWindows";
-import { applyTitleBarOverlayColors, titleBarOverlay } from "./titleBarOverlay";
-import {
-  MAIN_WINDOW_MINIMUM_HEIGHT,
-  MAIN_WINDOW_MINIMUM_WIDTH,
-  restoredMainWindowBounds,
-} from "./windowState";
+import { applyTitleBarOverlayColors } from "./titleBarOverlay";
 
 let handlingFatalError = false;
 
@@ -113,32 +108,9 @@ crashReporter.start({ submitURL: "", uploadToServer: false, compress: false });
 const testScriptPath = developmentSwitchValue("test-script");
 
 function createWindow(): BrowserWindow {
-  const restoredState = process.platform === "win32" ? storedMainWindowState() : undefined;
-  const restoredBounds =
-    process.platform === "win32"
-      ? restoredMainWindowBounds(
-          restoredState,
-          screen.getAllDisplays().map((display) => display.workArea),
-          screen.getPrimaryDisplay().workArea,
-        )
-      : undefined;
   const window = new BrowserWindow({
-    x: restoredBounds?.x,
-    y: restoredBounds?.y,
-    width: restoredBounds?.width ?? 1280,
-    height: restoredBounds?.height ?? 800,
-    minWidth: Math.min(
-      MAIN_WINDOW_MINIMUM_WIDTH,
-      restoredBounds?.width ?? MAIN_WINDOW_MINIMUM_WIDTH,
-    ),
-    minHeight: Math.min(
-      MAIN_WINDOW_MINIMUM_HEIGHT,
-      restoredBounds?.height ?? MAIN_WINDOW_MINIMUM_HEIGHT,
-    ),
     show: false,
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
-    trafficLightPosition: process.platform === "darwin" ? { x: 18, y: 19 } : undefined,
-    titleBarOverlay: titleBarOverlay(),
+    ...compactWindowOptions(),
     icon: process.platform === "linux" ? resourcePath("icons", "512x512.png") : undefined,
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.cjs"),
@@ -148,13 +120,8 @@ function createWindow(): BrowserWindow {
       backgroundThrottling: !testScriptPath,
     },
   });
-  if (process.platform === "win32") {
-    registerMainWindowStatePersistence(window, restoredState?.maximized === true);
-  }
+  attachCompactWindow(window);
   window.once("ready-to-show", () => {
-    if (restoredState?.maximized === true) {
-      window.maximize();
-    }
     window.show();
   });
   window.webContents.setWindowOpenHandler(({ url }) => {
@@ -185,9 +152,11 @@ function createWindow(): BrowserWindow {
   const rendererURL = developmentRendererURL();
   let loadPromise: Promise<void>;
   if (rendererURL !== "") {
-    loadPromise = window.loadURL(rendererURL);
+    const url = new URL(rendererURL);
+    url.searchParams.set("compact", "1");
+    loadPromise = window.loadURL(url.toString());
   } else {
-    loadPromise = window.loadFile(join(import.meta.dirname, "../renderer/index.html"));
+    loadPromise = window.loadFile(join(import.meta.dirname, "../renderer/index.html"), { query: { compact: "1" } });
   }
   void loadPromise.catch((error: unknown) => handleFatal("main-window-load", error));
   attachTestInstrumentation(window);
@@ -218,32 +187,10 @@ function maybeQuitAfterWindowClosed() {
   }
 }
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
   quitting = true;
+  queueMicrotask(() => { if (event.defaultPrevented) quitting = false; });
 });
-
-function registerMainWindowStatePersistence(window: BrowserWindow, initiallyMaximized: boolean) {
-  let maximized = initiallyMaximized;
-
-  const save = () => {
-    const bounds = window.getNormalBounds();
-    void saveMainWindowState({ ...bounds, maximized }).catch((error: unknown) => {
-      console.error("failed to save the main window state", error);
-    });
-  };
-
-  window.on("moved", save);
-  window.on("resized", save);
-  window.on("maximize", () => {
-    maximized = true;
-    save();
-  });
-  window.on("unmaximize", () => {
-    maximized = false;
-    save();
-  });
-  window.on("close", save);
-}
 
 function attachTestInstrumentation(window: BrowserWindow) {
   if (!testScriptPath) {
@@ -326,7 +273,7 @@ function parseImportLink(link: string): DeepLinkImport | null {
 }
 
 function sendWhenLoaded(channel: string, payload: unknown) {
-  const window = showWindow();
+  const window = openAdvancedWindow();
   if (window.webContents.isLoading()) {
     window.webContents.once("did-finish-load", () => {
       window.webContents.send(channel, payload);
@@ -390,7 +337,7 @@ function handleProfileFile(path: string) {
 const TAILDROP_SEND_REQUEST_LIFETIME = 60_000;
 
 function deliverTaildropSend(files: TaildropSendFile[]) {
-  const window = showWindow();
+  const window = openAdvancedWindow();
   if (!window.webContents.isLoading()) {
     window.webContents.send(TAILDROP_SEND_REQUEST, files);
     return;
@@ -470,7 +417,7 @@ if (!singleInstanceLock) {
       const window = BrowserWindow.fromWebContents(event.sender);
       if (
         window !== null &&
-        (window === mainWindow ||
+        (isAdvancedWindow(window) ||
           terminalWindows?.has(window) === true ||
           profileEditorWindows?.has(window) === true)
       ) {
@@ -486,6 +433,7 @@ if (!singleInstanceLock) {
     registerProfiles();
     registerServers();
     registerSettings(updateTrayVisibility);
+    registerCustomDesktop(openAdvancedWindow, showWindow);
     registerTaildrop();
     registerNotifications(handleNotificationOpen);
     registerUpdates();
