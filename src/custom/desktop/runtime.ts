@@ -9,6 +9,7 @@ import { CUSTOM_CALL, CUSTOM_CHANGED } from "./contracts";
 import { fitCompactPage } from "./windows";
 import { CompactController } from "./controller";
 import type { SavedAccount } from "./controller";
+import { AccountError, secureURL } from "./accountApi";
 import { nodeConfig } from "./config";
 import { callProfileOperation, fetchRemoteContent, startServiceWithContent, selectProfile, profilesState } from "../../main/profiles";
 import { managedService, startedService } from "../../main/daemon";
@@ -20,6 +21,7 @@ import type { ProfileMetadata } from "../../shared/ipc";
 import { parseProxySnapshot, readWindowsProxy, writeWindowsProxy, systemProxyConfig } from "./windowsProxy";
 import type { ProxySnapshot } from "./windowsProxy";
 
+const deviceIdentity = new Preference<string>("custom_device_id", crypto.randomUUID(), (value) => { if (typeof value !== "string" || !/^[0-9a-f-]{36}$/i.test(value)) throw new Error("invalid device identity"); return value; });
 const profileIds = new Preference<string[]>("custom_account_profile_ids", [], (value) => {
   if (!Array.isArray(value) || !value.every((id) => typeof id === "string")) throw new Error("invalid account profiles");
   return value;
@@ -85,7 +87,8 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
     if (process.env.KUKUHOU_DEV_LOGIN === "1") development.enabled = true;
     if (process.env.KUKUHOU_DEV_SUBSCRIPTION_URL) development.subscriptionUrl = process.env.KUKUHOU_DEV_SUBSCRIPTION_URL;
   }
-  const configured = configuredAccountApi(app.isPackaged, process.env.KUKUHOU_API_BASE_URL ?? "", development);
+  const deviceId = deviceIdentity.get(); deviceIdentity.set(deviceId);
+  const configured = configuredAccountApi(app.isPackaged, process.env.KUKUHOU_API_BASE_URL ?? "", development, deviceId);
   const controller = new CompactController(configured.api, {
     load, save,
     loadSelection: (userId) => Object.hasOwn(nodeSelections.get(), userId) ? nodeSelections.get()[userId] : "",
@@ -105,7 +108,12 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
     },
     sync: async (session, id) => {
       let skipped = 0;
-      const content = await fetchRemoteContent(session.subscriptionUrl, (count) => { skipped = count; });
+      const trustedOrigin = secureURL(configured.api.baseURL).origin;
+      if (!configured.developmentLogin && secureURL(session.subscriptionUrl).origin !== trustedOrigin) throw new AccountError("订阅服务地址不可信");
+      const content = await fetchRemoteContent(session.subscriptionUrl, (count) => { skipped = count; }, configured.developmentLogin ? undefined : {
+        headers: { Authorization: `Bearer ${session.accessToken}`, "X-Client-Device-Id": deviceId }, origin: trustedOrigin,
+        rejected: (status) => new AccountError(status === 401 ? "登录已失效，可能已在其他设备登录，请重新登录" : "订阅暂不可用或账号已停用", status === 401 || status === 403),
+      });
       await applicationService.checkConfig({ content });
       const formatted = (await applicationService.formatConfig({ content })).content;
       nodeConfig(formatted);
@@ -266,13 +274,14 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
       finally { polling = false; }
     })();
   }, 1000);
+  const validation = setInterval(() => { if (controller.state.user && !controller.state.loading) void controller.verify().catch(() => {}); }, 60_000);
   const updates = setInterval(() => { if (controller.state.user && !controller.state.loading) void controller.refresh().catch(() => {}); }, 60 * 60 * 1000);
   poll.unref(); updates.unref();
   let exiting = false;
   app.on("before-quit", (event) => {
     if (exiting) return;
     event.preventDefault();
-    void controller.shutdown().then(() => { exiting = true; clearInterval(poll); clearInterval(updates); app.quit(); }, () => {
+    void controller.shutdown().then(() => { exiting = true; clearInterval(poll); clearInterval(updates); clearInterval(validation); app.quit(); }, () => {
       // Leave the UI available for retry rather than silently abandoning owned proxy state.
       BrowserWindow.getAllWindows().forEach((window) => window.show());
     });

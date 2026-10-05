@@ -26,6 +26,7 @@ export class CompactController {
   private activeGroup = "";
   private activeNodes: string[] = [];
   private owned = false;
+  private verifiedAt = 0;
   private queue: Promise<unknown> = Promise.resolve();
   constructor(private readonly api: AccountApi, private readonly deps: AccountDependencies) {
     this.state = { configured: !!api.baseURL, user: null, nodes: [], selected: "", phase: "idle", loading: false, error: "", notice: "", upload: 0, download: 0 };
@@ -47,10 +48,10 @@ export class CompactController {
       this.account = await this.deps.load(); this.remember = !!this.account;
       await this.deps.cleanup(this.account?.profileId);
       if (!this.account) return;
-      try { this.account.session = await this.api.session(this.account.session); }
+      try { this.account.session = await this.api.session(this.account.session); this.verifiedAt = performance.now(); }
       catch (error) {
         if (error instanceof AccountError && error.invalidSession) { await this.clear(); this.state.error = error.message; return; }
-        this.state.notice = "暂时无法验证登录，使用本账号缓存；连接前将重新验证";
+        this.state.notice = "暂时无法验证登录，显示本账号缓存；连接前将重新验证";
       }
       this.state.user = this.account.session.user;
       this.state.lastUpdated = this.account.lastUpdated;
@@ -66,6 +67,7 @@ export class CompactController {
       const session = await this.api.login(account, password);
       await this.clear();
       this.account = { session, selected: this.deps.loadSelection?.(session.user.id) ?? "" }; this.remember = remember;
+      this.verifiedAt = performance.now();
       this.state.user = session.user;
       await this.persist();
       await this.refreshInternal();
@@ -90,18 +92,21 @@ export class CompactController {
     if (!this.account) throw new AccountError("请先登录");
     try {
       this.account.session = await this.api.session(this.account.session);
+      this.verifiedAt = performance.now();
       await this.persist();
     } catch (error) {
       if (error instanceof AccountError && error.invalidSession) await this.clear();
-      // A transient outage may use the authenticated account's unexpired cache.
-      else if (error instanceof AccountError && Date.parse(this.account?.session.expiresAt ?? "") > Date.now()) {
-        this.state.notice = "登录服务暂时不可用，使用缓存节点"; return;
-      }
       throw error;
     }
   }
   private async refreshInternal() {
     if (!this.account) throw new AccountError("请先登录");
+    if (["expired", "quota_exhausted"].includes(this.account.session.subscriptionStatus ?? "")) {
+      await this.disconnectInternal();
+      await this.deps.cleanup(); this.account.profileId = undefined; this.content = "";
+      Object.assign(this.state, { nodes: [], selected: "", error: "订阅已到期或额度耗尽" });
+      await this.persist(); return;
+    }
     try {
       const result = await this.deps.sync(this.account.session, this.account.profileId);
       if (result.notice) this.state.notice = result.notice;
@@ -111,12 +116,16 @@ export class CompactController {
       this.account.lastUpdated = result.updated;
       if (this.owned && this.deps.running()) this.state.notice = "订阅已更新，下次连接生效";
       await this.persist();
-    } catch { this.state.error = "已登录，节点加载失败；可重试更新订阅"; }
+    } catch (error) {
+      if (error instanceof AccountError && error.invalidSession) { await this.clear(); throw error; }
+      this.state.error = "已登录，节点加载失败；可重试更新订阅";
+    }
   }
   refresh(): Promise<void> { return this.operation(async () => { await this.validate(); await this.refreshInternal(); }); }
   connect(): Promise<void> {
     return this.operation(async () => {
       await this.validate();
+      this.requireEligible();
       if (this.deps.running()) throw new AccountError("已有服务运行，请先断开或在高级管理中处理");
       if (!this.content || !this.state.selected) throw new AccountError("请先加载可用节点");
       this.state.phase = "connecting"; this.emit(); this.owned = true;
@@ -153,13 +162,27 @@ export class CompactController {
       await this.persist();
     });
   }
+  private requireEligible() {
+    const status = this.account?.session.subscriptionStatus;
+    if (status && status !== "active") throw new AccountError(status === "pending" ? "节点等待同步，请稍后更新订阅" : "订阅已到期或额度耗尽");
+  }
+  verify(now = performance.now()): Promise<void> {
+    return this.operation(async () => {
+      if (!this.account) return;
+      try { await this.validate(); if (this.owned) { try { this.requireEligible(); } catch (error) { await this.disconnectInternal(); throw error; } } }
+      catch (error) {
+        if (this.owned && now - this.verifiedAt >= 120_000) await this.disconnectInternal();
+        throw error;
+      }
+    });
+  }
   private async clear() {
     await this.disconnectInternal();
     await this.deps.save(null); await this.deps.cleanup();
     this.account = null; this.content = ""; this.remember = false; this.activeGroup = "";
     Object.assign(this.state, { user: null, nodes: [], selected: "", notice: "", lastUpdated: undefined });
   }
-  logout(): Promise<void> { return this.operation(() => this.clear()); }
+  logout(): Promise<void> { return this.operation(async () => { if (this.account) await this.api.logout(this.account.session).catch(() => {}); await this.clear(); }); }
   shutdown(): Promise<void> { return this.operation(() => this.disconnectInternal()); }
   reconcile(running: boolean, proxyEnabled: boolean, upload = 0, download = 0) {
     if (this.state.loading) return;

@@ -8,7 +8,7 @@ import { nodeConfig, selectConfig } from "./config";
 import { parseProxySnapshot, systemProxyConfig } from "./windowsProxy";
 import { configuredAccountApi } from "./developmentAccount";
 
-const session = (): AccountSession => ({ accessToken: "synthetic-token", expiresAt: new Date(Date.now() + 86400_000).toISOString(), user: { id: "test-user", displayName: "测试账号" }, subscriptionUrl: "https://example.invalid/sub" });
+const session = (): AccountSession => ({ accessToken: "synthetic-token", expiresAt: new Date(Date.now() + 86400_000).toISOString(), user: { id: "test-user", displayName: "测试账号" }, subscriptionUrl: "https://example.invalid/sub", subscriptionStatus: "active" });
 const config = (tags = ["A", "B"]) => JSON.stringify({ inbounds: [{ type: "mixed", listen: "127.0.0.1", listen_port: 10808 }], outbounds: [{ type: "selector", tag: "PROXY", outbounds: tags, default: tags[0] }, ...tags.map((tag) => ({ type: "vless", tag }))], route: { final: "PROXY" } });
 
 function fixture(saved: SavedAccount | null = null, selections: Record<string, string> = {}) {
@@ -29,10 +29,10 @@ function fixture(saved: SavedAccount | null = null, selections: Record<string, s
     running: () => running,
     changed: () => {},
   };
-  const api = new AccountApi("https://example.invalid", async (url, init) => {
+  const api: AccountApi = new AccountApi("https://example.invalid", async (url, init) => {
     if (invalid) return new Response("SECRET", { status: 401 });
     if (network) throw new Error("private-address");
-    if (String(url).endsWith("login")) assert.deepEqual(JSON.parse(String(init?.body)), { account: "test", password: "test" });
+    if (String(url).endsWith("login")) assert.deepEqual(JSON.parse(String(init?.body)), { account: "test", password: "test", deviceId: api.deviceId });
     return Response.json(session());
   });
   const controller = new CompactController(api, deps);
@@ -137,7 +137,7 @@ test("invalid restored session clears cached account", async () => {
 test("network outage restores unexpired account cache and selection", async () => {
   const f = fixture({ session: session(), profileId: "owned", selected: "B" }); f.network(); await f.controller.restore();
   assert.equal(f.controller.state.selected, "B"); assert.equal(f.controller.state.nodes.length, 2);
-  await f.controller.connect(); assert.equal(f.controller.state.phase, "connected");
+  await assert.rejects(f.controller.connect()); assert.equal(f.controller.state.phase, "idle");
 });
 test("unavailable encryption keeps only in-memory login", async () => {
   const f = fixture(); f.encryption(); await f.controller.login("test", "test", true);
@@ -166,4 +166,32 @@ test("packaged builds and non-opted-in development use only real authentication"
   const packaged = configuredAccountApi(true, "https://example.invalid", { enabled: true, subscriptionUrl: "https://example.invalid/sub" });
   assert.equal(packaged.developmentLogin, undefined); assert.equal(packaged.api.baseURL, "https://example.invalid");
   assert.equal(configuredAccountApi(false, "", { subscriptionUrl: "https://example.invalid/sub" }).developmentLogin, undefined);
+});
+
+test("device identity is attached to login, session and logout", async () => {
+  const device = crypto.randomUUID(); let loginBody: unknown;
+  const api = new AccountApi("https://example.invalid", async (url, init) => {
+    if (String(url).endsWith("login")) loginBody = JSON.parse(String(init?.body));
+    else assert.equal(new Headers(init?.headers).get("X-Client-Device-Id"), device);
+    return Response.json(session());
+  }, device);
+  await api.login("test", "test"); await api.session(session()); await api.logout(session());
+  assert.deepEqual(loginBody, { account: "test", password: "test", deviceId: device });
+});
+test("takeover invalidation stops connection and removes account cache", async () => {
+  const f = fixture(); await f.controller.login("test", "test", true); await f.controller.connect(); f.invalid();
+  await assert.rejects(f.controller.verify());
+  assert.equal(f.controller.state.user, null); assert.equal(f.saved(), null); assert.ok(f.events.includes("stop"));
+});
+test("unverified connections stop after 120 seconds, while short outages keep them", async () => {
+  const f = fixture(); await f.controller.login("test", "test", true); await f.controller.connect(); f.network();
+  await assert.rejects(f.controller.verify(performance.now())); assert.equal(f.controller.state.phase, "connected");
+  await assert.rejects(f.controller.verify(performance.now() + 120_001)); assert.equal(f.controller.state.phase, "idle");
+});
+test("non-active subscription status prevents new connection", async () => {
+  const value = { ...session(), subscriptionStatus: "expired" as const };
+  const api = new AccountApi("https://example.invalid", async () => Response.json(value));
+  let starts = 0;
+  const controller = new CompactController(api, { load: async () => null, save: async () => true, cleanup: async () => {}, read: async () => config(), sync: async () => ({id:"profile",content:config(),updated:1}), start: async () => { starts++; }, stop: async () => {}, select: async () => {}, running: () => false, changed: () => {} });
+  await controller.login("test", "test", false); assert.equal(controller.state.user?.id, "test-user"); assert.equal(controller.state.nodes.length, 0); await assert.rejects(controller.connect(), /额度耗尽/); assert.equal(starts, 0);
 });

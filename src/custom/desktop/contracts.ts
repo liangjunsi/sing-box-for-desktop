@@ -6,6 +6,7 @@ export interface AccountSession {
   expiresAt: string;
   user: { id: string; displayName: string };
   subscriptionUrl: string;
+  subscriptionStatus?: "active" | "pending" | "expired" | "quota_exhausted";
 }
 export interface CompactNode { tag: string; protocol: string }
 export interface CompactState {
