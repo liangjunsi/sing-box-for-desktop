@@ -1,9 +1,10 @@
-import { app, BrowserWindow, ipcMain, safeStorage, Menu } from "electron";
+import { app, BrowserWindow, ipcMain, safeStorage, Menu, shell } from "electron";
+import { resourcePath } from "../../main/resources";
 import type { Rectangle } from "electron";
 import { readFile, writeFile, rename, unlink, mkdir } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { configuredAccountApi } from "./developmentAccount";
+import { configuredAccountApi, productionSubscriptionOrigin } from "./developmentAccount";
 import type { DevelopmentAccountOptions } from "./developmentAccount";
 import { CUSTOM_CALL, CUSTOM_CHANGED } from "./contracts";
 import { fitCompactPage } from "./windows";
@@ -109,7 +110,7 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
     },
     sync: async (session, id) => {
       let skipped = 0;
-      const trustedOrigin = configured.developmentLogin ? "" : trustedSubscriptionOrigin(configured.api.baseURL, session.subscriptionUrl, process.env.KUKUHOU_SUBSCRIPTION_ORIGIN);
+      const trustedOrigin = configured.developmentLogin ? "" : trustedSubscriptionOrigin(configured.api.baseURL, session.subscriptionUrl, process.env.KUKUHOU_SUBSCRIPTION_ORIGIN || (app.isPackaged ? productionSubscriptionOrigin : ""));
       const content = await fetchRemoteContent(session.subscriptionUrl, (count) => { skipped = count; }, configured.developmentLogin ? undefined : {
         headers: { Authorization: `Bearer ${session.accessToken}`, "X-Client-Device-Id": deviceId }, origin: trustedOrigin,
         rejected: (status) => new AccountError(status === 401 ? "登录成功，但订阅服务拒绝登录凭证（401），请检查两个域名是否连接同一中心及认证请求头转发" : "订阅暂不可用或账号已停用", status === 401 || status === 403),
@@ -246,9 +247,14 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
   ipcMain.handle(CUSTOM_CALL, async (_event, method: unknown, ...args: unknown[]) => {
     try {
       await ready;
-      if (initializationFailed && method !== "state" && method !== "advanced") throw new Error();
+      if (initializationFailed && method !== "state" && method !== "advanced" && method !== "licenses") throw new Error();
       switch (method) {
         case "state": return { ok: true, value: controller.state };
+        case "licenses": {
+          const failure = await shell.openPath(resourcePath("licenses"));
+          if (failure) throw new Error();
+          break;
+        }
         case "login":
           if (typeof args[0] !== "string" || typeof args[1] !== "string" || typeof args[2] !== "boolean") throw new Error();
           await controller.login(args[0], args[1], args[2]); break;

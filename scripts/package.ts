@@ -128,6 +128,7 @@ function ensureGenerated() {
   }
   runChecked("pnpm", ["-C", "dashboard", "generate"]);
   runChecked("pnpm", ["generate"]);
+  runChecked(process.execPath, ["scripts/third-party-notices.cjs"]);
 }
 
 function buildBoxdd(
@@ -265,7 +266,7 @@ async function runWindowsElectronBuilder(
   artifactArchitecture: string,
   signingConfiguration?: WindowsSigningConfiguration,
 ): Promise<void> {
-  const artifactName = `SFW-\${version}-${artifactArchitecture}${developmentPackage ? "-dev" : ""}${unsignedPackage ? "-unsigned" : ""}.\${ext}`;
+  const artifactName = `kukuhou-\${version}-${artifactArchitecture}${developmentPackage ? "-dev" : ""}${unsignedPackage ? "-unsigned" : ""}.\${ext}`;
   const unpackedDirectory = {
     x64: "win-unpacked",
     x86: "win-ia32-unpacked",

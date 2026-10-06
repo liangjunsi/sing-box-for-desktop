@@ -1,6 +1,9 @@
 import { AccountApi, AccountError, parseSession } from "./accountApi";
 import type { AccountSession } from "./contracts";
 
+export const productionAccountBaseURL = "https://chat.kukuhou.com";
+export const productionSubscriptionOrigin = "https://sub.kukuhou.com";
+
 export interface DevelopmentAccountOptions {
   enabled?: boolean;
   subscriptionUrl?: string;
@@ -23,5 +26,5 @@ export function configuredAccountApi(packaged: boolean, baseURL: string, options
   if (!packaged && options.enabled === true && typeof options.subscriptionUrl === "string" && options.subscriptionUrl) {
     return { api: new DevelopmentAccountApi(options.subscriptionUrl), developmentLogin: { account: "dev", password: "dev123456" } };
   }
-  return { api: new AccountApi(baseURL, fetch, deviceId), developmentLogin: undefined };
+  return { api: new AccountApi(baseURL || (packaged ? productionAccountBaseURL : ""), fetch, deviceId), developmentLogin: undefined };
 }

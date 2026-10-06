@@ -9,7 +9,9 @@ SetFont "Segoe UI" 9
 
 !ifndef BUILD_UNINSTALLER
   !include StrContains.nsh
-  !define DO_NOT_CREATE_DESKTOP_SHORTCUT
+  !ifndef ONE_CLICK
+    !define DO_NOT_CREATE_DESKTOP_SHORTCUT
+  !endif
 
   Var allowUnsafeInstallation
   Var installationValidationAllowsUnsafe
@@ -99,6 +101,8 @@ SetFont "Segoe UI" 9
   Var applicationDataDirectory
   Var daemonDataDirectory
   Var installationID
+  Var keepUninstallData
+  Var keepUninstallDataCheckbox
 !endif
 
 !define MUI_CUSTOMFUNCTION_GUIINIT clearBrandingText
@@ -111,6 +115,10 @@ SetFont "Segoe UI" 9
 !macro clearBrandingTextControl
   GetDlgItem $0 $HWNDPARENT 1256
   SendMessage $0 ${WM_SETTEXT} 0 "STR:"
+  ShowWindow $0 ${SW_HIDE}
+  GetDlgItem $0 $HWNDPARENT 1028
+  SendMessage $0 ${WM_SETTEXT} 0 "STR:"
+  ShowWindow $0 ${SW_HIDE}
 !macroend
 
 Function clearBrandingText
@@ -124,6 +132,13 @@ FunctionEnd
 !endif
 
 !macro customHeader
+  BrandingText " "
+  !ifdef ONE_CLICK
+    !ifndef BUILD_UNINSTALLER
+      ; Keep preflight helper functions without registering wizard pages.
+      !insertmacro customPageAfterChangeDir
+    !endif
+  !endif
   !insertmacro MUI_LANGUAGE "Farsi"
 
   !ifndef BUILD_UNINSTALLER
@@ -1018,9 +1033,11 @@ FunctionEnd
 !macroend
 
 !macro customPageAfterChangeDir
-  Page custom showDataDirectoriesPage leaveDataDirectoriesPage
-  Page custom showInstallationDirectoryValidationPage
-  Page custom showUnsafeInstallationConfirmationPage
+  !ifndef ONE_CLICK
+    Page custom showDataDirectoriesPage leaveDataDirectoriesPage
+    Page custom showInstallationDirectoryValidationPage
+    Page custom showUnsafeInstallationConfirmationPage
+  !endif
 
   Function expandInstallerToFitControl
     Exch $0
@@ -1699,6 +1716,10 @@ FunctionEnd
 !macroend
 
 !macro customInstall
+  ; Link the displayed application identity to its existing uninstall record.
+  WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" "AppUserModelID" "${APP_ID}"
+  DeleteRegValue SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" "NoRemove"
+  DeleteRegValue SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" "SystemComponent"
   !insertmacro daemonExecutable $0
   SetDetailsPrint both
   DetailPrint "$(registeringService)"
@@ -1735,6 +1756,7 @@ FunctionEnd
   WriteRegStr HKLM "${INSTALLATION_LAYOUT_REGISTRY_KEY}" "DaemonDataDirectory" "$daemonDataDirectory"
   !insertmacro restoreInstallerRegistryView
   !insertmacro registerTaildropVerb
+  CreateShortCut "$SMPROGRAMS\卸载 kukuhou.lnk" "$INSTDIR\${UNINSTALL_FILENAME}" "/allusers" "$INSTDIR\${UNINSTALL_FILENAME}" 0
   ${if} $dataMigrationPrepared == 1
     DetailPrint "$(completingDataMigration)"
   ${endif}
@@ -1824,9 +1846,6 @@ FunctionEnd
 !macroend
 
 !macro customUnWelcomePage
-  Var keepUninstallData
-  Var keepUninstallDataCheckbox
-
   !define MUI_PAGE_CUSTOMFUNCTION_SHOW un.showKeepDataCheckbox
   !define MUI_PAGE_CUSTOMFUNCTION_LEAVE un.readKeepDataCheckbox
   !insertmacro MUI_UNPAGE_WELCOME
@@ -1871,6 +1890,7 @@ FunctionEnd
 !macro customUnInstall
   SetDetailsPrint both
   ${ifNot} ${isUpdated}
+    Delete "$SMPROGRAMS\卸载 kukuhou.lnk"
     !insertmacro daemonExecutable $0
     ${if} ${FileExists} "$0"
       DetailPrint "$(removingService)"

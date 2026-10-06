@@ -174,9 +174,14 @@ test("development login loads configured subscription and rejects incorrect pass
   assert.equal((await configured.api.session(loggedIn)).user.id, "development-user");
 });
 test("packaged builds and non-opted-in development use only real authentication", () => {
+  const defaultPackaged = configuredAccountApi(true, "", { enabled: true, subscriptionUrl: "https://example.invalid/sub" });
+  assert.equal(defaultPackaged.api.baseURL, "https://chat.kukuhou.com");
+  assert.equal(defaultPackaged.developmentLogin, undefined);
+  assert.equal(trustedSubscriptionOrigin(defaultPackaged.api.baseURL, "https://sub.kukuhou.com/s/test", "https://sub.kukuhou.com"), "https://sub.kukuhou.com");
   const packaged = configuredAccountApi(true, "https://example.invalid", { enabled: true, subscriptionUrl: "https://example.invalid/sub" });
   assert.equal(packaged.developmentLogin, undefined); assert.equal(packaged.api.baseURL, "https://example.invalid");
   assert.equal(configuredAccountApi(false, "", { subscriptionUrl: "https://example.invalid/sub" }).developmentLogin, undefined);
+  assert.equal(configuredAccountApi(false, "").api.baseURL, "");
 });
 
 test("device identity is attached to login, session and logout", async () => {

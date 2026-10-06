@@ -47,3 +47,12 @@
 .kc-toast span { flex: 1; min-width: 0; }
 .kc-toast button { flex-shrink: 0; border: 0; background: transparent; color: #fff; padding: 4px; font-size: 18px; line-height: 1; }
 html:has(.kukuhou-compact), body:has(.kukuhou-compact) { margin: 0; padding: 0; min-width: 0; overflow: auto; background: #f5f7fb; }
+.kc-legal { box-sizing: border-box; width: calc(100% - 24px); max-width: 600px; max-height: calc(100vh - 32px); margin: auto; padding: 16px; border: 1px solid #dce3ed; border-radius: 12px; background: #fff; color: #17243b; overflow: auto; font: 12px/1.6 "Segoe UI", "Microsoft YaHei", sans-serif; }
+.kc-legal::backdrop { background: #17243b55; }
+.kc-legal header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.kc-legal h2 { font-size: 16px; margin: 0; }
+.kc-legal header button { border: 0; background: transparent; color: #52617a; font-size: 24px; cursor: pointer; }
+.kc-legal a { color: #2563eb; }
+.kc-legal details { margin-top: 14px; }
+.kc-legal summary { cursor: pointer; color: #2563eb; }
+.kc-legal pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.5 monospace; }

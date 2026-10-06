@@ -1,4 +1,4 @@
-productName: sing-box
+productName: kukuhou
 copyright: nekohasekai
 publish: null
 afterPack: scripts/afterPack.cjs
@@ -29,6 +29,14 @@ electronLanguages:
   - fa
   - ru
 extraResources:
+  - from: LICENSE
+    to: licenses/desktop-LICENSE.txt
+  - from: dashboard/LICENSE
+    to: licenses/dashboard-LICENSE.txt
+  - from: ../sing-box/LICENSE
+    to: licenses/core-LICENSE.txt
+  - from: resources/licenses
+    to: licenses
   - from: resources/trayTemplate.png
     to: trayTemplate.png
   - from: resources/trayTemplate@2x.png
@@ -48,6 +56,8 @@ fileAssociations:
     mimeType: application/x-sing-box-profile
 win:
   appId: io.nekohasekai.sfw
+  # The daemon authenticates the desktop process using this fixed file name.
+  executableName: sing-box
   forceCodeSigning: true
   icon: resources/icon.ico
   signtoolOptions:
@@ -82,7 +92,9 @@ win:
     - nsis
   artifactName: SFW-${version}-${env.SFW_ARCHITECTURE}.${ext}
 nsis:
-  oneClick: false
+  shortcutName: kukuhou
+  uninstallDisplayName: kukuhou
+  oneClick: true
   buildUniversalInstaller: false
   differentialPackage: false
   installerLanguages:
@@ -90,7 +102,6 @@ nsis:
     - zh_CN
     - zh_TW
     - ru_RU
-  license: LICENSE
   perMachine: true
   allowToChangeInstallationDirectory: false
   deleteAppDataOnUninstall: false

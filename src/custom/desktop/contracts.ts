@@ -32,5 +32,6 @@ export interface CustomBridge {
   disconnect(): Promise<void>;
   select(tag: string): Promise<void>;
   advanced(route?: string): Promise<void>;
+  licenses(): Promise<void>;
   onChanged(listener: (state: CompactState) => void): () => void;
 }

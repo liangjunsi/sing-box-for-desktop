@@ -111,7 +111,7 @@ function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
     show: false,
     ...compactWindowOptions(),
-    icon: process.platform === "linux" ? resourcePath("icons", "512x512.png") : undefined,
+    icon: resourcePath("icons", "512x512.png"),
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.cjs"),
       contextIsolation: true,
