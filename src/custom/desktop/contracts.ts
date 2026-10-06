@@ -6,6 +6,7 @@ export interface AccountSession {
   expiresAt: string;
   user: { id: string; displayName: string };
   subscriptionUrl: string;
+  subscriptionStatus?: "active" | "pending" | "expired" | "quota_exhausted";
 }
 export interface CompactNode { tag: string; protocol: string }
 export interface CompactState {
@@ -31,5 +32,6 @@ export interface CustomBridge {
   disconnect(): Promise<void>;
   select(tag: string): Promise<void>;
   advanced(route?: string): Promise<void>;
+  licenses(): Promise<void>;
   onChanged(listener: (state: CompactState) => void): () => void;
 }

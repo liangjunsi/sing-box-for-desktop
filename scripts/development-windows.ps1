@@ -1,14 +1,29 @@
-param([int]$Port = 19431)
+param(
+    [int]$Port = 19431,
+    [ValidateSet('development', 'production')][string]$Environment = 'development'
+)
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path $PSScriptRoot -Parent
 $daemonPath = Join-Path $repositoryRoot 'bin\sing-box-daemon.exe'
-$daemonData = Join-Path $repositoryRoot 'bin\development-daemon'
-$userData = Join-Path $repositoryRoot 'bin\development-user-data'
+$daemonData = Join-Path $repositoryRoot "bin\$Environment-daemon"
+$userData = Join-Path $repositoryRoot "bin\$Environment-user-data"
 $daemonProcess = $null
+$previousApiBaseUrl = $env:KUKUHOU_API_BASE_URL
+$previousDevLogin = $env:KUKUHOU_DEV_LOGIN
+$previousSubscriptionOrigin = $env:KUKUHOU_SUBSCRIPTION_ORIGIN
 
 Push-Location $repositoryRoot
 try {
+    if ($Environment -eq 'production') {
+        $env:KUKUHOU_API_BASE_URL = 'https://chat.kukuhou.com'
+        $env:KUKUHOU_DEV_LOGIN = '0'
+        $env:KUKUHOU_SUBSCRIPTION_ORIGIN = 'https://sub.kukuhou.com'
+    } else {
+        $env:KUKUHOU_API_BASE_URL = ''
+        $env:KUKUHOU_DEV_LOGIN = '1'
+    }
+    Write-Host "Starting $Environment client (user data: $userData)"
     $boxDirectory = Join-Path (Split-Path $repositoryRoot -Parent) 'sing-box'
     # Match the Linux daemon's TCP development identity without editing the sibling checkout.
     $peerSourcePath = Join-Path $boxDirectory 'experimental\boxdd\peer_windows.go'
@@ -89,6 +104,9 @@ func platformFallbackPeerIdentity(ctx context.Context) (peerIdentity, error) {
     & pnpm exec electron-vite dev -- "--daemon-address=http://127.0.0.1:$Port" "--user-data=$userData"
     if ($LASTEXITCODE -ne 0) { throw 'Desktop application exited with an error.' }
 } finally {
+    $env:KUKUHOU_API_BASE_URL = $previousApiBaseUrl
+    $env:KUKUHOU_DEV_LOGIN = $previousDevLogin
+    $env:KUKUHOU_SUBSCRIPTION_ORIGIN = $previousSubscriptionOrigin
     if ($null -ne $daemonProcess -and -not $daemonProcess.HasExited) {
         Stop-Process -Id $daemonProcess.Id
     }

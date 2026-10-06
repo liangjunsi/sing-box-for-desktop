@@ -99,6 +99,20 @@ applies. The menu includes the full manager, logs, startup preference and exit.
 
 ### Login service contract
 
+On Windows, `pnpm dev:win` starts the local development login adapter (configure
+its subscription URL below). `pnpm prod:win` starts the same local desktop and
+daemon against `https://chat.kukuhou.com`, explicitly disabling the development
+login even when the local config enables it. Sign in with a real production
+account. These commands use separate `bin/development-user-data` and
+`bin/production-user-data` directories, and separate daemon data directories.
+
+Production also trusts `https://sub.kukuhou.com` for authenticated subscription
+downloads via `KUKUHOU_SUBSCRIPTION_ORIGIN`. Other launch methods may set this
+variable to their trusted HTTPS subscription origin when it differs from the API.
+Redirects remain disabled so credentials cannot follow a redirect to another host.
+Stop the current client before switching environments; both use port 19431.
+`prod:win` runs from source; it does not build an installer or deploy the server.
+
 For local development only, opt in with ignored `bin/development-account.json`:
 `{ "enabled": true, "subscriptionUrl": "<your HTTPS subscription>" }`.
 Alternatively set `KUKUHOU_DEV_LOGIN=1` and `KUKUHOU_DEV_SUBSCRIPTION_URL`.
@@ -111,7 +125,8 @@ subscription config. Existing development startup scripts automatically pick it 
 
 Set `KUKUHOU_API_BASE_URL` in the environment used to launch the app (for example
 `https://account.example.invalid`). An optional base path is preserved. No live
-API or subscription endpoint is embedded in source. Without this setting, login
+subscription endpoint is embedded in source. The Windows production launch script
+sets the production API domain. Without this setting, login
 is disabled with an explanation; the advanced manager remains usable.
 
 - `POST <base>/api/client/login`, JSON `{ account, password }`.

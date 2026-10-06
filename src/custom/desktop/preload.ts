@@ -12,6 +12,7 @@ export const customBridge: CustomBridge = {
   state: () => call("state"), login: (account, password, remember) => call("login", account, password, remember),
   logout: () => call("logout"), refresh: () => call("refresh"), connect: () => call("connect"), disconnect: () => call("disconnect"),
   select: (tag) => call("select", tag), advanced: (route) => call("advanced", route),
+  licenses: () => call("licenses"),
   onChanged: (listener) => {
     const handler = (_event: IpcRendererEvent, state: CompactState) => listener(state);
     ipcRenderer.on(CUSTOM_CHANGED, handler);

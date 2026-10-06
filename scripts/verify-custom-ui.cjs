@@ -14,7 +14,7 @@ ipcMain.handle("custom-desktop:call", (_event, method) => ({ ok: true, value: me
 app.whenReady().then(async () => {
   const deadline = setTimeout(() => { writeFileSync(resolve(output, `failure-${scale}.txt`), "UI verification timed out"); app.exit(1); }, 25_000);
   mkdirSync(output, { recursive: true });
-  const window = new BrowserWindow({ width: 360, height: 440, useContentSize: true, show: false, webPreferences: { preload: resolve("out/preload/index.cjs"), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
+  const window = new BrowserWindow({ width: 320, height: 400, useContentSize: true, show: false, webPreferences: { preload: resolve("out/preload/index.cjs"), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
   window.setMenu(null);
   const failures = [];
   const reports = [];
@@ -35,6 +35,11 @@ app.whenReady().then(async () => {
     console.log(JSON.stringify({ name, scale, width: metrics.width, height: metrics.height, scrollHeight: metrics.scrollHeight }));
   }
   await capture("login");
+  if (await window.webContents.executeJavaScript("document.querySelector('.kc-primary').disabled")) throw new Error("Configured login button is disabled");
+  state = { ...state, configured: false };
+  window.webContents.send("custom-desktop:changed", state); await capture("unconfigured-login");
+  state = { ...state, configured: true };
+  window.webContents.send("custom-desktop:changed", state);
   const warning = "已跳过 1 个无法安全转换的节点，其余节点可正常使用（保留 TLS 安全校验）";
   window.webContents.send("subscription:warning", warning);
   await capture("subscription-warning");
@@ -43,10 +48,18 @@ app.whenReady().then(async () => {
   await pause();
   if (await window.webContents.executeJavaScript("!!document.querySelector('.kc-toast')")) throw new Error("Toast dismissal failed");
   state = { ...state, user: { id: "synthetic", displayName: "测试账号" }, nodes: [{ tag: "香港 01 · 稳定线路", protocol: "vless" }, { tag: "新加坡 02", protocol: "hysteria2" }], selected: "香港 01 · 稳定线路", lastUpdated: Date.now() };
+  window.setContentSize(320, 420);
   window.webContents.send("custom-desktop:changed", state); await capture("disconnected");
   state = { ...state, phase: "connected", upload: 23456, download: 1234567 };
   window.webContents.send("custom-desktop:changed", state); await capture("connected");
   await window.webContents.executeJavaScript("setTimeout(() => document.querySelector('.kc-menu-toggle').click(), 0); true"); await capture("menu");
+  await window.webContents.executeJavaScript("Array.from(document.querySelectorAll('.kc-menu button')).find(button => button.textContent === '关于与开源许可').click(); true");
+  await capture("legal");
+  if (!(await window.webContents.executeJavaScript("document.querySelector('.kc-legal').open && document.querySelector('.kc-legal').textContent.includes('WITHOUT ANY WARRANTY')"))) throw new Error("Offline legal notices missing");
+  await window.webContents.executeJavaScript("document.querySelector('.kc-legal').close(); true");
+  await pause();
+  if (await window.webContents.executeJavaScript("!!document.querySelector('.kc-legal')")) throw new Error("Legal dialog did not close");
+  await window.webContents.executeJavaScript("document.querySelector('.kc-menu-toggle').click(); true");
   await window.webContents.executeJavaScript("setTimeout(() => document.querySelector('.kc-dismiss').click(), 0); true");
   state = { ...state, phase: "failed", error: "连接失败，请检查守护进程与系统代理权限", notice: "订阅已更新，下次连接生效" };
   window.webContents.send("custom-desktop:changed", state); await capture("error");

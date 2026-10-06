@@ -20,6 +20,8 @@ import { Preference, settingsDatabase } from "./database";
 import { serviceStartOptions } from "./settings";
 import { userAgent } from "./userAgent";
 import { normalizeRemoteSubscription } from "../custom/subscription/remote";
+import { fetchAccountSubscription } from "../custom/subscription/accountDownload";
+import type { AccountSubscriptionAuth } from "../custom/subscription/accountDownload";
 import { applicationService } from "./worker";
 import { daemonState } from "./state";
 
@@ -203,7 +205,8 @@ async function readLimitedResponse(
 // Mirrors libbox's HTTPClient (experimental/libbox/http.go): SetURL turns
 // URL userinfo into a basic Authorization header, and Execute accepts only
 // HTTP 200, reporting other statuses as "HTTP <Status>: <body>".
-export async function fetchRemoteContent(remoteUrl: string, onSkipped?: (count: number) => void): Promise<string> {
+export async function fetchRemoteContent(remoteUrl: string, onSkipped?: (count: number) => void, accountAuth?: AccountSubscriptionAuth): Promise<string> {
+  if (accountAuth) return normalizeRemoteSubscription(await fetchAccountSubscription(remoteUrl, accountAuth, userAgent()), remoteUrl, onSkipped);
   const requestUrl = new URL(remoteUrl);
   const headers = new Headers({ "User-Agent": userAgent() });
   if (requestUrl.username !== "" || requestUrl.password !== "") {

@@ -1,0 +1,29 @@
+kukuhou is an unofficial modified version of sing-box-for-desktop.
+It is not affiliated with, sponsored by, or endorsed by SagerNet or nekohasekai.
+
+Original desktop client, dashboard and sing-box core:
+Copyright (C) 2022 by nekohasekai <contact-sagernet@sekai.icu>
+Licensed under GNU GPL version 3 or, at your option, any later version.
+The original additional naming/non-association notice is preserved in the
+desktop-LICENSE.txt, dashboard-LICENSE.txt and core-LICENSE.txt files.
+
+Modification notice, 2026-10-06:
+Custom account login and subscription integration, compact interface,
+system proxy controls, kukuhou branding and generated crying-monkey icon,
+Windows default one-click installer and local code-signing workflow.
+
+This program is provided WITHOUT ANY WARRANTY, including MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. You may modify and redistribute it
+under the applicable GNU GPL terms. The full GPLv3 text is in GPL-3.0.txt.
+
+Upstream projects (these do not contain all kukuhou modifications):
+https://github.com/SagerNet/sing-box-for-desktop
+https://github.com/SagerNet/sing-box-dashboard
+https://github.com/SagerNet/sing-box
+
+Before distributing binaries, the distributor must provide the complete
+Corresponding Source for that exact release under GPLv3 section 6.
+The repository address alone does not prove that all release changes have
+been published. Build/install instructions must allow recipients to build
+and sign their own modified versions; the distributor's private key is not
+included in a source release.

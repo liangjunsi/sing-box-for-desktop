@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const applicationIconSource = path.resolve(repositoryRoot, "..", "sing-box", "docs", "assets", "icon.svg");
+const applicationIconSource = path.join(repositoryRoot, "resources", "kukuhou-icon.png");
 const statusBarIconSource = path.resolve(
   repositoryRoot,
   "..",
@@ -75,6 +75,10 @@ function centerOnCanvas(glyphPath: string, canvasSize: number, outputPath: strin
 }
 
 function renderApplicationIcon(size: number, workingDirectory: string, outputPath: string) {
+  if (applicationIconSource.endsWith(".png")) {
+    runChecked("magick", [applicationIconSource, "-filter", "point", "-resize", `${size}x${size}`, outputPath]);
+    return;
+  }
   const glyphPath = path.join(workingDirectory, `glyph-${size}.png`);
   runChecked("rsvg-convert", [
     "--width",
@@ -90,6 +94,10 @@ function renderApplicationIcon(size: number, workingDirectory: string, outputPat
 }
 
 function renderColorTrayIcon(size: number, workingDirectory: string, outputPath: string) {
+  if (applicationIconSource.endsWith(".png")) {
+    renderApplicationIcon(size, workingDirectory, outputPath);
+    return;
+  }
   const glyphPath = path.join(workingDirectory, `tray-color-glyph-${size}.png`);
   runChecked("rsvg-convert", [
     "--width",

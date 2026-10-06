@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import type { CompactState } from "./contracts";
 import { NodePicker } from "./NodePicker";
 import { Toast } from "./Toast";
+import { LegalNotice } from "./LegalNotice";
 import "./compact.css";
 
 const initial: CompactState = { configured: false, user: null, nodes: [], selected: "", phase: "idle", loading: true, error: "", notice: "", upload: 0, download: 0 };
@@ -16,6 +17,7 @@ export function CompactApp() {
   const [account, setAccount] = useState(""); const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [menu, setMenu] = useState(false); const [pending, setPending] = useState(false);
+  const [legal, setLegal] = useState(false);
   const [error, setError] = useState(""); const [openAtLogin, setOpenAtLogin] = useState(false);
   const custom = window.desktop.custom;
   const developmentFilled = useRef(false);
@@ -57,6 +59,7 @@ export function CompactApp() {
           <button disabled={pending} onClick={() => { void run(async () => { await window.desktop.settings.setOpenAtLogin(!openAtLogin); setOpenAtLogin(!openAtLogin); }); }}>开机启动 {openAtLogin ? "✓" : ""}</button>
           <button onClick={() => { setMenu(false); void run(() => custom.advanced("logs")); }}>查看日志</button>
           <button onClick={() => { setMenu(false); void run(() => custom.advanced()); }}>高级管理</button>
+          <button onClick={() => { setMenu(false); setLegal(true); }}>关于与开源许可</button>
           {state.user && <button disabled={busy} onClick={() => { setMenu(false); void run(() => custom.logout()); }}>退出登录</button>}
           <button onClick={() => { void run(() => window.desktop.app.quit()); }}>退出程序</button>
         </div></>}
@@ -81,5 +84,6 @@ export function CompactApp() {
       <div className="kc-traffic"><div><span>↓ 下载</span><strong>{rate(state.download)}</strong></div><div><span>↑ 上传</span><strong>{rate(state.upload)}</strong></div></div>
       <footer>{state.lastUpdated ? `更新于 ${new Date(state.lastUpdated).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}` : "等待加载订阅"}<button disabled={busy} onClick={() => void run(() => custom.refresh())}>刷新</button></footer>
     </section>}
+    {legal && <LegalNotice onClose={() => setLegal(false)} />}
   </main>;
 }
