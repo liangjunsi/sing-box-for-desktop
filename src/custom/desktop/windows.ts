@@ -32,7 +32,7 @@ export function compactWindowOptions(): BrowserWindowConstructorOptions {
     y: Math.max(target.y, Math.min(state?.y ?? target.y + Math.round((target.height - height) / 2), target.y + target.height - height)),
     width, height, useContentSize: true, minWidth: Math.min(300, target.width), minHeight: Math.min(300, target.height),
     minimizable: false, maximizable: false,
-    titleBarStyle: "hidden", titleBarOverlay: { color: "#f5f7fb", symbolColor: "#52617a", height: 36 }, backgroundColor: "#f5f7fb", title: "Kukuhou",
+    titleBarStyle: "hidden", titleBarOverlay: process.platform === "darwin" ? false : { color: "#f5f7fb", symbolColor: "#52617a", height: 36 }, backgroundColor: "#f5f7fb", title: "Kukuhou",
   };
 }
 
@@ -40,6 +40,8 @@ export function attachCompactWindow(window: BrowserWindow): void {
   compact = window; compactLoggedIn = false;
   window.once("closed", () => { if (compact === window) compact = null; });
   window.setMenu(null);
+  // Disabling minimize/maximize still leaves the macOS traffic lights visible.
+  if (process.platform === "darwin") window.setWindowButtonVisibility(false);
   const save = () => compactState.set({ ...window.getNormalBounds(), width: window.getContentBounds().width, height: window.getContentBounds().height, maximized: false });
   window.on("moved", save); window.on("resized", save);
   window.on("close", (event) => {

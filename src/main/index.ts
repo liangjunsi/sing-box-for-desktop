@@ -1,4 +1,4 @@
-import { app, BrowserWindow, crashReporter, dialog, ipcMain, screen, session, shell } from "electron";
+import { app, BrowserWindow, crashReporter, dialog, ipcMain, Menu, screen, session, shell } from "electron";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -402,6 +402,11 @@ if (!singleInstanceLock) {
   });
 
   void app.whenReady().then(async () => {
+    Menu.setApplicationMenu(null);
+    if (process.platform === "darwin") {
+      // A regular macOS app retains its application menu even with a null menu.
+      app.setActivationPolicy("accessory");
+    }
     session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
       callback(permission === "clipboard-sanitized-write");
     });

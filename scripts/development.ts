@@ -50,6 +50,9 @@ process.on("SIGTERM", handleSignal);
 
 function runChecked(command: string, commandArguments: string[], workingDirectory = repositoryRoot) {
   const result = spawnSync(command, commandArguments, { cwd: workingDirectory, stdio: "inherit" });
+  if (result.error) {
+    console.error(`Failed to run ${command}: ${result.error.message}`);
+  }
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
@@ -170,20 +173,26 @@ async function main(): Promise<number> {
     console.error("automatic daemon startup requires a unix domain socket, pass --daemon-socket <path> instead");
     return 1;
   }
-  runChecked(
+  const daemonPath = path.join(repositoryRoot, "bin", "sing-box-daemon");
+  const goVersion = spawnSync("go", ["version"], { stdio: "ignore" });
+  if ((goVersion.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT" && fs.existsSync(daemonPath)) {
+    console.warn("Go is not on PATH; using the existing bin/sing-box-daemon. Install Go to rebuild daemon changes.");
+  } else {
+    runChecked(
     "go",
     [
       "run",
       "./cmd/internal/build_boxdd",
       "-debug",
-      `-output=${path.join(repositoryRoot, "bin", "sing-box-daemon")}`,
+      `-output=${daemonPath}`,
     ],
     singBoxDirectory,
-  );
+    );
+  }
   const workingDirectory = fs.mkdtempSync("/tmp/sing-box-desktop-development-");
   const socketPath = path.join(workingDirectory, "daemon.sock");
   daemonProcess = spawn(
-    path.join(repositoryRoot, "bin", "sing-box-daemon"),
+    daemonPath,
     ["run", "--working-directory", workingDirectory, "--socket", socketPath],
     { stdio: "inherit" },
   );
