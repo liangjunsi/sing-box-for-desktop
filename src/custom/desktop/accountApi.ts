@@ -10,6 +10,14 @@ export function secureURL(value: string): URL {
   return url;
 }
 
+export function trustedSubscriptionOrigin(baseURL: string, subscriptionURL: string, configuredOrigin = ""): string {
+  const target = secureURL(subscriptionURL).origin;
+  const allowed = [secureURL(baseURL).origin];
+  if (configuredOrigin) allowed.push(secureURL(configuredOrigin).origin);
+  if (!allowed.includes(target)) throw new AccountError("订阅域名未配置为可信服务，请检查 KUKUHOU_SUBSCRIPTION_ORIGIN");
+  return target;
+}
+
 export function parseSession(value: unknown, token?: string): AccountSession {
   if (!value || typeof value !== "object") throw new AccountError("登录服务返回格式错误");
   const data = value as Partial<AccountSession>;
@@ -34,7 +42,7 @@ export class AccountApi {
     try { response = await this.request(url, { ...init, redirect: "error", signal: AbortSignal.timeout(15_000) }); }
     catch { throw new AccountError("登录服务暂时无法访问，请稍后重试"); }
     if (!response.ok) {
-      const messages: Record<number, string> = { 401: "登录已失效，可能已在其他设备登录，请重新登录", 403: "账号已停用", 429: "请求过于频繁，请稍后重试" };
+      const messages: Record<number, string> = { 401: path === "login" ? "登录接口拒绝认证（401），请核对客户端账号及服务端账号绑定" : "会话接口拒绝认证（401），请重新登录", 403: "账号已停用", 429: "请求过于频繁，请稍后重试" };
       throw new AccountError(messages[response.status] ?? "登录服务请求失败", response.status === 401 || response.status === 403);
     }
     // Never surface response bodies: they may contain credentials.

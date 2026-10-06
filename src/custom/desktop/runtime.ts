@@ -9,7 +9,7 @@ import { CUSTOM_CALL, CUSTOM_CHANGED } from "./contracts";
 import { fitCompactPage } from "./windows";
 import { CompactController } from "./controller";
 import type { SavedAccount } from "./controller";
-import { AccountError, secureURL } from "./accountApi";
+import { AccountError, trustedSubscriptionOrigin } from "./accountApi";
 import { nodeConfig } from "./config";
 import { callProfileOperation, fetchRemoteContent, startServiceWithContent, selectProfile, profilesState } from "../../main/profiles";
 import { managedService, startedService } from "../../main/daemon";
@@ -85,6 +85,7 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
   if (!app.isPackaged) {
     try { development = JSON.parse(readFileSync(join(app.getAppPath(), "bin", "development-account.json"), "utf8")) as DevelopmentAccountOptions; } catch { /* Optional local config. */ }
     if (process.env.KUKUHOU_DEV_LOGIN === "1") development.enabled = true;
+    if (process.env.KUKUHOU_DEV_LOGIN === "0") development.enabled = false;
     if (process.env.KUKUHOU_DEV_SUBSCRIPTION_URL) development.subscriptionUrl = process.env.KUKUHOU_DEV_SUBSCRIPTION_URL;
   }
   const deviceId = deviceIdentity.get(); deviceIdentity.set(deviceId);
@@ -108,15 +109,24 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
     },
     sync: async (session, id) => {
       let skipped = 0;
-      const trustedOrigin = secureURL(configured.api.baseURL).origin;
-      if (!configured.developmentLogin && secureURL(session.subscriptionUrl).origin !== trustedOrigin) throw new AccountError("订阅服务地址不可信");
+      const trustedOrigin = configured.developmentLogin ? "" : trustedSubscriptionOrigin(configured.api.baseURL, session.subscriptionUrl, process.env.KUKUHOU_SUBSCRIPTION_ORIGIN);
       const content = await fetchRemoteContent(session.subscriptionUrl, (count) => { skipped = count; }, configured.developmentLogin ? undefined : {
         headers: { Authorization: `Bearer ${session.accessToken}`, "X-Client-Device-Id": deviceId }, origin: trustedOrigin,
-        rejected: (status) => new AccountError(status === 401 ? "登录已失效，可能已在其他设备登录，请重新登录" : "订阅暂不可用或账号已停用", status === 401 || status === 403),
+        rejected: (status) => new AccountError(status === 401 ? "登录成功，但订阅服务拒绝登录凭证（401），请检查两个域名是否连接同一中心及认证请求头转发" : "订阅暂不可用或账号已停用", status === 401 || status === 403),
+      }).catch((error: unknown) => {
+        if (error instanceof AccountError) throw error;
+        throw new AccountError("订阅下载或格式解析失败，请检查网络及服务端订阅格式");
       });
-      await applicationService.checkConfig({ content });
-      const formatted = (await applicationService.formatConfig({ content })).content;
-      nodeConfig(formatted);
+      const formatted = await (async () => {
+        try {
+          await applicationService.checkConfig({ content });
+          return (await applicationService.formatConfig({ content })).content;
+        } catch {
+          throw new AccountError(daemonState.connection.phase !== "connected" ? "本地内核未连接，请重启客户端" : "订阅未通过内核校验，请检查节点配置及内核版本");
+        }
+      })();
+      try { nodeConfig(formatted); }
+      catch { throw new AccountError("订阅没有可选择的节点，请检查服务端节点和 selector 配置"); }
       if (id && profilesState().profiles.some((profile) => profile.id === id)) {
         // Local managed profile: save without reloading the running service.
         await callProfileOperation("writeContent", id, formatted);
@@ -177,6 +187,7 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
   });
   controller.state.developmentLogin = configured.developmentLogin;
   let initializationFailed = false;
+  let initializationStage = "读取代理恢复记录";
   const ready = (async () => {
     if (process.platform === "win32" && encryptionAvailable()) {
       try {
@@ -186,6 +197,7 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
         proxyServer = recovery.server; startedProfileId = recovery.profileId;
       }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+      initializationStage = "恢复系统代理";
       await restoreProxy();
       if (startedProfileId && profilesState().selectedId === startedProfileId) {
         // Wait for the normal ownership handshake before stopping a crash-leftover service.
@@ -197,12 +209,25 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
             daemonState.on("connection", changed);
           });
         }
+        initializationStage = "停止上次残留的代理服务";
         if (daemonState.connection.phase === "connected") await requireManaged().stopService({}, { timeoutMs: 5000 });
         startedProfileId = undefined;
       }
     }
-    await controller.restore();
-  })().catch(() => { initializationFailed = true; controller.state.error = "初始化失败，请检查服务或代理恢复状态后重启"; });
+    initializationStage = "恢复账号";
+    try { await controller.restore(); }
+    catch {
+      // Account restoration can fail when a saved session expires. Keep login and
+      // retry available after proxy recovery has completed successfully.
+      if (!controller.state.error) controller.state.error = "账号恢复失败，请重新登录";
+    }
+  })().catch((error: unknown) => {
+    initializationFailed = true;
+    const code = (error as NodeJS.ErrnoException | null)?.code;
+    const safeCode = typeof code === "string" && /^[A-Z0-9_]{1,32}$/.test(code) ? `（${code}）` : "";
+    controller.state.error = `初始化失败：${initializationStage}${safeCode}，请重启后重试`;
+    console.error(`custom desktop initialization failed: ${initializationStage}${safeCode}`);
+  });
   accountTrayMenu = (bounds) => {
     if (!controller.state.user || !activeProfileId || profilesState().selectedId !== activeProfileId) return false;
     const state = controller.state;

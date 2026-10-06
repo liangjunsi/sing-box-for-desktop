@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AccountApi, AccountError, parseSession } from "./accountApi";
+import { AccountApi, AccountError, parseSession, trustedSubscriptionOrigin } from "./accountApi";
 import { CompactController } from "./controller";
 import type { AccountDependencies, SavedAccount } from "./controller";
 import type { AccountSession } from "./contracts";
@@ -10,6 +10,17 @@ import { configuredAccountApi } from "./developmentAccount";
 
 const session = (): AccountSession => ({ accessToken: "synthetic-token", expiresAt: new Date(Date.now() + 86400_000).toISOString(), user: { id: "test-user", displayName: "测试账号" }, subscriptionUrl: "https://example.invalid/sub", subscriptionStatus: "active" });
 const config = (tags = ["A", "B"]) => JSON.stringify({ inbounds: [{ type: "mixed", listen: "127.0.0.1", listen_port: 10808 }], outbounds: [{ type: "selector", tag: "PROXY", outbounds: tags, default: tags[0] }, ...tags.map((tag) => ({ type: "vless", tag }))], route: { final: "PROXY" } });
+
+test("authenticated subscriptions accept only API or explicitly trusted HTTPS origins", () => {
+  const api = "https://api.example.invalid";
+  const trusted = "https://sub.example.invalid";
+  assert.equal(trustedSubscriptionOrigin(api, `${api}/sub`), api);
+  assert.equal(trustedSubscriptionOrigin(api, `${trusted}/s/test`, trusted), trusted);
+  assert.throws(() => trustedSubscriptionOrigin(api, `${trusted}/s/test`), AccountError);
+  for (const url of ["https://sub.example.invalid.evil.invalid/s", "https://other.invalid/s", "http://sub.example.invalid/s", "https://user:pass@sub.example.invalid/s", "https://sub.example.invalid:8443/s"]) {
+    assert.throws(() => trustedSubscriptionOrigin(api, url, trusted), AccountError);
+  }
+});
 
 function fixture(saved: SavedAccount | null = null, selections: Record<string, string> = {}) {
   let running = false; let content = config(); let failSync = false; let failStart = false; let failStop = false;

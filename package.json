@@ -28,6 +28,7 @@
     "icons": "tsx scripts/icons.ts",
     "dev": "tsx scripts/development.ts",
     "dev:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/development-windows.ps1",
+    "prod:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/development-windows.ps1 -Environment production",
     "build": "electron-vite build",
     "package-dev:win": "tsx scripts/package.ts dev win",
     "package-dev:linux": "tsx scripts/package.ts dev linux",

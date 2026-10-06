@@ -118,7 +118,7 @@ export class CompactController {
       await this.persist();
     } catch (error) {
       if (error instanceof AccountError && error.invalidSession) { await this.clear(); throw error; }
-      this.state.error = "已登录，节点加载失败；可重试更新订阅";
+      this.state.error = error instanceof AccountError ? `已登录，${error.message}` : "已登录，节点加载失败；可重试更新订阅";
     }
   }
   refresh(): Promise<void> { return this.operation(async () => { await this.validate(); await this.refreshInternal(); }); }
