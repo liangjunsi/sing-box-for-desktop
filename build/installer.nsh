@@ -1730,6 +1730,7 @@ FunctionEnd
   ${endif}
   ${if} $1 != 0
     StrCpy $5 $1
+    Push $3
     DetailPrint "$(rollingBackInstallation)"
     StrCpy $2 -1
     ClearErrors
@@ -1738,6 +1739,7 @@ FunctionEnd
       StrCpy $2 -1
     ${endif}
     !insertmacro executeDataTransition "Rollback"
+    Pop $3
     StrCpy $1 $5
     ${if} $2 == 0
       Abort "$(registerServiceFailedRolledBack)"

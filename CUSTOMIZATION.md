@@ -36,12 +36,28 @@ The existing sing-box validation still runs before a profile is saved.
 
 Supported protocols: VLESS (including Reality), VMess JSON links, Hysteria2/Hy2,
 TUIC, AnyTLS and Trojan. Transports: TCP, WebSocket, HTTP/H2, gRPC and HTTPUpgrade.
-Certificate fingerprints (`pinSHA256`) cannot be represented as sing-box
-public-key fingerprints. The strict parser rejects them; the remote import adapter
+Certificate fingerprints (`pinSHA256`) cannot be represented directly as sing-box
+public-key fingerprints. The strict parser still rejects them (including links with
+both pin types). Explicit `pinSHA256PublicKey` values must be canonical standard
+Base64 encoding of a 32-byte SHA-256 SPKI digest and map to
+`tls.certificate_public_key_sha256`; malformed, duplicate, plaintext, and Reality
+pin combinations are rejected. The remote import adapter
 skips unsupported nodes and shows a warning. Repeated identical warnings are
 suppressed during the current app session. If no usable nodes remain, import fails.
 No TLS security parameters are silently discarded. YAML/Clash and Shadowsocks
 subscriptions are outside the current supported formats.
+
+Account subscription requests advertise `X-Kukuhou-Subscription-Format: sing-box-v1`.
+The kukuhou node reads its configured local TLS certificate, verifies any original
+certificate pin, and reports a separately derived public-key pin to the center.
+Only the compatible account response substitutes that pin; generic subscriptions
+retain the original certificate pin. Upgrade the server nodes and center, allow a
+successful node sync to refresh stored links, then update Android/Desktop and refresh
+the subscription. Old reports containing only certificate pins remain unsupported;
+the client never guesses a public-key hash or disables pinning as a fallback.
+
+The compact account page has no node speed test. Its traffic indicators display
+the running proxy's current upload/download rates without generating test traffic.
 
 `customization.versions.json` records the baseline desktop, dashboard and backend
 commits. Update it after a verified upgrade; pnpm lockfiles pin package versions.
@@ -147,6 +163,15 @@ can use unexpired account-specific cache. Explicit invalidation clears that
 account. Connect/refresh revalidate the session. There is no invented refresh-token
 endpoint: expired sessions require signing in again.
 
+Minute session checks and hourly subscription updates run in the background.
+Failed background account checks stay silent, keep the current proxy connected,
+and mark plan data as cached. This includes network errors, HTTP 401/403 and local
+session expiration; none clears the account or disconnects the proxy during a
+background check. Manual actions still validate and handle invalid sessions.
+Successfully verified ineligible subscriptions still stop the connection.
+Manual login/connect/refresh failures remain actionable errors. Background
+subscription-download failures retain existing nodes and show an update notice.
+
 Password is never saved. A remembered session, subscription address, node choice,
 profile ID and update timestamp are encrypted in `custom-account.enc` using
 Electron safeStorage, outside the preferences snapshot shared with renderers.
@@ -183,12 +208,20 @@ arbitrary prior Linux desktop proxy settings are not captured by the Windows ada
 
 ### Verification
 
+Windows `electron-vite dev` prepares a cached runtime under
+`bin/development-electron/` with the kukuhou icon embedded in `electron.exe`.
+Keep this filename: Electron uses it to recognize an unpackaged development app.
+This covers the startup taskbar icon before window icon settings take effect.
+The cache changes with the Electron version/executable metadata or app icon;
+the installed Electron runtime and release packaging remain unchanged.
+
 Run:
 
 ```powershell
 node --import tsx --test src/custom/desktop/desktop.test.ts src/custom/subscription/subscription.test.ts
 node node_modules/typescript/bin/tsc -b
 node node_modules/electron-vite/bin/electron-vite.js build
+node --import tsx scripts/verify-windows-development.ts
 ```
 
 `scripts/verify-custom-ui.cjs` is a development-only hidden Electron harness using

@@ -1,0 +1,9 @@
+/* The upstream tray panel starts with its standalone service switch. */
+[data-tray-panel] > :first-child {
+  display: none;
+}
+
+[data-tray-panel] > :nth-child(2) {
+  border-top: 0;
+  margin-top: 0;
+}

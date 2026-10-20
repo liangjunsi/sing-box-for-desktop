@@ -38,10 +38,21 @@ function transport(kind: string, path: string, host: string): Fields | undefined
 function tls(parameters: URLSearchParams, mandatory: boolean): Fields | undefined {
   const security = parameters.get("security") || "";
   if (security && !["none", "tls", "reality"].includes(security)) throw new Error("Unsupported TLS security mode");
-  if (!mandatory && security !== "tls" && security !== "reality") return undefined;
   // A certificate fingerprint is not a public-key fingerprint. Never silently discard it.
-  if (parameters.get("pinSHA256")) throw new Error("pinSHA256 certificate pinning cannot be converted to sing-box public-key pinning");
+  if (parameters.getAll("pinSHA256").some(Boolean)) throw new Error("pinSHA256 certificate pinning cannot be converted to sing-box public-key pinning");
+  const pins = parameters.getAll("pinSHA256PublicKey");
+  let publicKeyPin: string | undefined;
+  if (pins.length) {
+    const pin = pins[0];
+    if (pins.length !== 1 || !/^[A-Za-z0-9+/]{43}=$/.test(pin) || Buffer.from(pin, "base64").length !== 32 || Buffer.from(pin, "base64").toString("base64") !== pin) {
+      throw new Error("Invalid TLS public-key SHA256 pin");
+    }
+    if ((!mandatory && security !== "tls") || security === "reality") throw new Error("Unsupported public-key pin without certificate TLS");
+    publicKeyPin = pin;
+  }
+  if (!mandatory && security !== "tls" && security !== "reality") return undefined;
   const result: Fields = { enabled: true };
+  if (publicKeyPin) result.certificate_public_key_sha256 = [publicKeyPin];
   const serverName = parameters.get("sni") || parameters.get("peer");
   if (serverName) result.server_name = serverName;
   if (flag(parameters, "insecure", "allowInsecure", "allow_insecure")) result.insecure = true;
@@ -65,6 +76,9 @@ function parseVMess(uri: string): Fields {
   if (text("alpn")) parameters.set("alpn", text("alpn"));
   if (text("fp")) parameters.set("fp", text("fp"));
   if (text("allowInsecure")) parameters.set("insecure", text("allowInsecure"));
+  for (const key of ["pinSHA256", "pinSHA256PublicKey"]) {
+    if (value[key] !== undefined) parameters.set(key, text(key));
+  }
   if (text("type") && text("type") !== "none") throw new Error("Unsupported VMess header camouflage");
   return {
     type: "vmess", tag: text("ps") || "VMess",

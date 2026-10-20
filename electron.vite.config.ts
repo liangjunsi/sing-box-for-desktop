@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import type { Plugin } from "vite";
 
 import { readApplicationVersion } from "./scripts/version";
+import { prepareWindowsDevelopmentRuntime } from "./scripts/windowsDevelopment";
 
 function contentSecurityPolicy(): Plugin {
   let development = false;
@@ -88,6 +89,11 @@ export default defineConfig({
         "@connectrpc/connect-web",
       ],
     },
-    plugins: [react(), contentSecurityPolicy()],
+    plugins: [react(), contentSecurityPolicy(), {
+      name: "kukuhou-development-runtime",
+      configResolved(config) {
+        if (config.command === "serve") prepareWindowsDevelopmentRuntime(import.meta.dirname);
+      },
+    }],
   },
 });

@@ -67,6 +67,7 @@
     "electron-vite": "^5.0.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "resedit": "1.7.2",
     "semver": "^7.8.5",
     "tsx": "^4.23.12",
     "typescript": "^6.0.3",

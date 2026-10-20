@@ -51,7 +51,7 @@ async function load(): Promise<SavedAccount | null> {
   try {
     const value = JSON.parse(safeStorage.decryptString(await readFile(sessionPath()))) as SavedAccount;
     if (!value?.session || typeof value.session.accessToken !== "string" || typeof value.session.expiresAt !== "string" ||
-      !value.session.user?.id || typeof value.session.subscriptionUrl !== "string" || typeof value.selected !== "string" ||
+      !value.session.user?.id || (value.session.subscriptionUrl !== null && typeof value.session.subscriptionUrl !== "string") || typeof value.selected !== "string" ||
       (value.profileId !== undefined && !profileIds.get().includes(value.profileId))) return null;
     return value;
   } catch { return null; }
@@ -109,6 +109,7 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
       return (await applicationService.formatConfig({ content })).content;
     },
     sync: async (session, id) => {
+      if (!session.subscriptionUrl) throw new AccountError("订阅暂不可用");
       let skipped = 0;
       const trustedOrigin = configured.developmentLogin ? "" : trustedSubscriptionOrigin(configured.api.baseURL, session.subscriptionUrl, process.env.KUKUHOU_SUBSCRIPTION_ORIGIN || (app.isPackaged ? productionSubscriptionOrigin : ""));
       const content = await fetchRemoteContent(session.subscriptionUrl, (count) => { skipped = count; }, configured.developmentLogin ? undefined : {
@@ -182,7 +183,6 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
     },
     running: () => daemonState.status === ServiceStatus_Type.STARTED || daemonState.status === ServiceStatus_Type.STARTING,
     changed: (state) => {
-      fitCompactPage(!!state.user);
       for (const window of BrowserWindow.getAllWindows()) if (!window.webContents.isDestroyed()) window.webContents.send(CUSTOM_CHANGED, state);
     },
   });
@@ -239,13 +239,17 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
       { label: disconnect ? "断开连接" : "连接系统代理", enabled: !state.loading && (disconnect || state.nodes.length > 0), click: () => action(() => disconnect ? controller.disconnect() : controller.connect()) },
       { label: "服务器节点", submenu: state.nodes.map((node) => ({ label: node.tag, type: "radio" as const, checked: state.selected === node.tag, enabled: !state.loading, click: () => action(() => controller.select(node.tag)) })) },
       { label: "更新订阅", enabled: !state.loading, click: () => action(() => controller.refresh()) },
-      { label: "高级管理", click: () => openAdvanced() },
       { type: "separator" }, { label: "退出", click: () => app.quit() },
     ]).popup({ x: Math.round(bounds.x), y: Math.round(bounds.y) });
     return true;
   };
   ipcMain.handle(CUSTOM_CALL, async (_event, method: unknown, ...args: unknown[]) => {
     try {
+      if (method === "resize") {
+        if (typeof args[0] !== "number" || !Number.isFinite(args[0]) || args[0] <= 0) throw new Error();
+        fitCompactPage(args[0], _event.sender.id);
+        return { ok: true, value: undefined };
+      }
       await ready;
       if (initializationFailed && method !== "state" && method !== "advanced" && method !== "licenses") throw new Error();
       switch (method) {
@@ -306,7 +310,7 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
     })();
   }, 1000);
   const validation = setInterval(() => { if (controller.state.user && !controller.state.loading) void controller.verify().catch(() => {}); }, 60_000);
-  const updates = setInterval(() => { if (controller.state.user && !controller.state.loading) void controller.refresh().catch(() => {}); }, 60 * 60 * 1000);
+  const updates = setInterval(() => { if (controller.state.user && !controller.state.loading) void controller.verify(true).catch(() => {}); }, 60 * 60 * 1000);
   poll.unref(); updates.unref();
   let exiting = false;
   app.on("before-quit", (event) => {

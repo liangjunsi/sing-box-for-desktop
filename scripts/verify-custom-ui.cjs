@@ -10,11 +10,18 @@ let state = { configured: true, user: null, nodes: [], selected: "", phase: "idl
 ipcMain.on("preferences:snapshot", (event) => { event.returnValue = {}; });
 ipcMain.handle("settings:call", () => ({ ok: true, value: { openAtLogin: false } }));
 ipcMain.handle("app:call", () => ({ ok: true, value: "test" }));
-ipcMain.handle("custom-desktop:call", (_event, method) => ({ ok: true, value: method === "state" ? state : undefined }));
+ipcMain.handle("custom-desktop:call", (event, method, height) => {
+  if (method === "resize") {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const frameHeight = window.getBounds().height - window.getContentBounds().height;
+    window.setBounds({ height: height + frameHeight });
+  }
+  return { ok: true, value: method === "state" ? state : undefined };
+});
 app.whenReady().then(async () => {
   const deadline = setTimeout(() => { writeFileSync(resolve(output, `failure-${scale}.txt`), "UI verification timed out"); app.exit(1); }, 25_000);
   mkdirSync(output, { recursive: true });
-  const window = new BrowserWindow({ width: 320, height: 400, useContentSize: true, show: false, webPreferences: { preload: resolve("out/preload/index.cjs"), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
+  const window = new BrowserWindow({ width: 320, height: 338, useContentSize: true, show: false, webPreferences: { preload: resolve("out/preload/index.cjs"), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
   window.setMenu(null);
   const failures = [];
   const reports = [];
@@ -25,9 +32,10 @@ app.whenReady().then(async () => {
     await pause();
     const metrics = await window.webContents.executeJavaScript(`(() => {
       const root = document.querySelector('.kukuhou-compact');
-      return { width: innerWidth, height: innerHeight, scrollWidth: Math.max(document.documentElement.scrollWidth,document.body.scrollWidth), scrollHeight: Math.max(document.documentElement.scrollHeight,document.body.scrollHeight), buttons: root?.querySelectorAll('button').length, text: root?.innerText };
+      return { width: innerWidth, height: innerHeight, contentHeight: root?.getBoundingClientRect().height, scrollWidth: Math.max(document.documentElement.scrollWidth,document.body.scrollWidth), scrollHeight: Math.max(document.documentElement.scrollHeight,document.body.scrollHeight), buttons: root?.querySelectorAll('button').length, text: root?.innerText };
     })()`);
     if (!metrics.buttons || metrics.scrollWidth > metrics.width) throw new Error(`UI layout failed: ${JSON.stringify(metrics)}`);
+    if (Math.abs(metrics.height - metrics.contentHeight) > 8) throw new Error(`Window does not fit content: ${JSON.stringify(metrics)}`);
     if (name !== "error" && metrics.scrollHeight > metrics.height) throw new Error(`Normal UI requires scrolling: ${name}`);
     reports.push({ name, scale, ...metrics, bounds: window.getBounds(), contentBounds: window.getContentBounds() });
     writeFileSync(resolve(output, `report-${scale}.json`), JSON.stringify(reports, null, 2));
@@ -48,10 +56,22 @@ app.whenReady().then(async () => {
   await pause();
   if (await window.webContents.executeJavaScript("!!document.querySelector('.kc-toast')")) throw new Error("Toast dismissal failed");
   state = { ...state, user: { id: "synthetic", displayName: "测试账号" }, nodes: [{ tag: "香港 01 · 稳定线路", protocol: "vless" }, { tag: "新加坡 02", protocol: "hysteria2" }], selected: "香港 01 · 稳定线路", lastUpdated: Date.now() };
-  window.setContentSize(320, 420);
   window.webContents.send("custom-desktop:changed", state); await capture("disconnected");
   state = { ...state, phase: "connected", upload: 23456, download: 1234567 };
   window.webContents.send("custom-desktop:changed", state); await capture("connected");
+  if (await window.webContents.executeJavaScript("/测速|检测网速/.test(document.querySelector('.kukuhou-compact').innerText)")) throw new Error("Node speed controls remain");
+  state = { ...state, planCached: true };
+  window.webContents.send("custom-desktop:changed", state); await capture("account-offline");
+  if (!(await window.webContents.executeJavaScript("!document.querySelector('[role=alert]') && !document.querySelector('.kc-message') && document.querySelector('.kc-status').textContent.includes('已连接')"))) throw new Error("Account outage displayed a message or proxy failure");
+  state = { ...state, planCached: false };
+  window.webContents.send("custom-desktop:changed", state); await capture("account-recovered");
+  if (await window.webContents.executeJavaScript("!!document.querySelector('.kc-message[role=status]')")) throw new Error("Account warning did not clear");
+  await window.webContents.executeJavaScript("document.querySelector('.kc-picker input').focus(); document.querySelector('.kc-picker input').dispatchEvent(new FocusEvent('focusin', { bubbles: true })); true");
+  await pause();
+  await capture("picker-open");
+  if (await window.webContents.executeJavaScript("document.querySelectorAll('.kc-options button').length !== 0 || document.querySelectorAll('.kc-options [role=option]').length !== 2")) throw new Error("Node picker contains speed controls or missing nodes");
+  await window.webContents.executeJavaScript("document.activeElement.blur(); true");
+  await pause();
   await window.webContents.executeJavaScript("setTimeout(() => document.querySelector('.kc-menu-toggle').click(), 0); true"); await capture("menu");
   await window.webContents.executeJavaScript("Array.from(document.querySelectorAll('.kc-menu button')).find(button => button.textContent === '关于与开源许可').click(); true");
   await capture("legal");

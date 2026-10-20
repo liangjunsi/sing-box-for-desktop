@@ -43,6 +43,12 @@ try {
   }
   assert.ok(ready, "daemon startup timed out");
   await desktop.claimService({}, { timeoutMs: 5000 });
+  const publicKeyPin = Buffer.alloc(32, 255).toString("base64");
+  const pinned = normalizeSubscription(`hy2://synthetic-password@127.0.0.1:65530?sni=example.invalid&pinSHA256PublicKey=${encodeURIComponent(publicKeyPin)}#Pinned-Hy2`);
+  await application.checkConfig({ content: pinned.content }, { timeoutMs: 5000 });
+  const pinnedFormatted = JSON.parse((await application.formatConfig({ content: pinned.content }, { timeoutMs: 5000 })).content);
+  const formattedPin = pinnedFormatted.outbounds.find((node: { type: string }) => node.type === "hysteria2").tls.certificate_public_key_sha256;
+  assert.deepEqual(Array.isArray(formattedPin) ? formattedPin : [formattedPin], [publicKeyPin]);
   if (subscriptionURL) {
     try {
       const response = await fetch(subscriptionURL, { headers: { "User-Agent": "SFW (sing-box 1.14.2; language en)" }, signal: AbortSignal.timeout(15_000) });
@@ -90,7 +96,7 @@ try {
   }
   await managed.stopService({}, { timeoutMs: 5000 });
   if (snapshot) { await writeWindowsProxy(snapshot); assert.deepEqual(await readWindowsProxy(), snapshot); restored = true; }
-  console.log(JSON.stringify({ daemonValidated: true, serviceStarted: true, nodeSwitchVerified: true, serviceStopped: true, proxyRoundtrip: restored }));
+  console.log(JSON.stringify({ daemonValidated: true, publicKeyPinValidated: true, serviceStarted: true, nodeSwitchVerified: true, serviceStopped: true, proxyRoundtrip: restored }));
 } finally {
   try { await managed.stopService({}, { timeoutMs: 3000 }); } catch {}
   if (snapshot && !restored) await writeWindowsProxy(snapshot);

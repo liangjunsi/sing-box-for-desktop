@@ -9,6 +9,7 @@ import { TrayMenu } from "@dashboard/TrayMenu";
 import { configurePreferenceStorage } from "@dashboard/lib/storage";
 import "@dashboard/styles/globals.css";
 import "@dashboard/styles/shared.css";
+import "../../custom/desktop/tray.css";
 
 import { createDesktopHost } from "./host";
 
