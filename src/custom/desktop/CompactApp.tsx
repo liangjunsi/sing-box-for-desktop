@@ -97,10 +97,9 @@ export function CompactApp() {
       </div>
       <div className="kc-traffic"><div><span>↓ 下载</span><strong>{rate(state.download)}</strong></div><div><span>↑ 上传</span><strong>{rate(state.upload)}</strong></div></div>
       <div className="kc-plan" aria-label="套餐信息">
-        <div className={plan.usageTone} title={plan.usageTitle}><span>本月已用{state.planCached ? " · 缓存" : ""}</span><strong>{plan.usage}</strong>{plan.usageStatus && <small>{plan.usageStatus}</small>}</div>
-        <div className={plan.expiryTone} title={plan.expiryTitle}><span>套餐到期{state.planCached ? " · 缓存" : ""}</span><strong>{plan.expiry}</strong>{plan.expiryStatus && <small>{plan.expiryStatus}</small>}</div>
+        <div className={plan.usageTone} title={plan.usageTitle}><span>本月已用</span><strong>{plan.usage}</strong>{plan.usageStatus && <small>{plan.usageStatus}</small>}</div>
+        <div className={plan.expiryTone} title={plan.expiryTitle}><span>套餐到期</span><strong>{plan.expiry}</strong>{plan.expiryStatus && <small>{plan.expiryStatus}</small>}</div>
       </div>
-      <footer>{state.lastUpdated ? `更新于 ${new Date(state.lastUpdated).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}` : "等待加载订阅"}<button disabled={busy} onClick={() => void run(() => custom.refresh())}>刷新</button></footer>
     </section>}
     {legal && <LegalNotice onClose={() => setLegal(false)} />}
   </main>;
