@@ -194,3 +194,25 @@ pacman:
     - build/sing-box-daemon.service=/usr/lib/systemd/system/sing-box-daemon.service
     - build/io.nekohasekai.sfl.policy=/usr/share/polkit-1/actions/io.nekohasekai.sfl.policy
     - build/io.nekohasekai.sfl.metainfo.xml=/usr/share/metainfo/io.nekohasekai.sfl.metainfo.xml
+
+mac:
+  appId: com.kukuhou.desktop
+  category: public.app-category.utilities
+  icon: resources/icon.icns
+  minimumSystemVersion: "12.0"
+  hardenedRuntime: true
+  notarize: false
+  target:
+    - dmg
+    - zip
+  artifactName: kukuhou-${version}-mac-${arch}-unsigned.${ext}
+  extraResources:
+    - from: bin/darwin/${arch}
+      to: daemon
+      filter:
+        - sing-box-daemon
+        - macos-proxy
+        - daemon-supervisor
+dmg:
+  title: kukuhou
+  writeUpdateInfo: false

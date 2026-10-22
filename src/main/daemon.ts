@@ -10,10 +10,13 @@ import { DesktopService } from "../shared/gen/experimental/boxdd/desktop_service
 import { developmentSwitchValue } from "./development";
 import { localeInterceptor } from "./locale";
 import { daemonWorkerTransport } from "./worker";
+import { macosDaemonTransport } from "./macosDaemon";
 
 let daemonTransport: Transport | null;
 if (process.platform === "win32" && app.isPackaged) {
   daemonTransport = daemonWorkerTransport;
+} else if (process.platform === "darwin" && !developmentSwitchValue("daemon-socket") && !developmentSwitchValue("daemon-address")) {
+  daemonTransport = macosDaemonTransport;
 } else {
   const defaultSocketPath =
     process.platform === "win32"

@@ -6,6 +6,7 @@ import { parseArgs } from "node:util";
 
 import { findBoxDirectory } from "./sing-box";
 import { buildWindowsShareModule } from "./windowsShare";
+import { productionAccountBaseURL, productionSubscriptionOrigin } from "../src/custom/desktop/developmentAccount";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const singBoxDirectory = findBoxDirectory();
@@ -18,11 +19,20 @@ if (scriptArguments[0] === "--") {
 const commandLine = parseArgs({
   args: scriptArguments,
   options: {
+    production: { type: "boolean", default: false },
     "daemon-socket": { type: "string" },
     "user-data": { type: "string" },
     "test-script": { type: "string" },
   },
 }).values;
+
+if (commandLine.production) {
+  process.env.KUKUHOU_API_BASE_URL = productionAccountBaseURL;
+  process.env.KUKUHOU_DEV_LOGIN = "0";
+  process.env.KUKUHOU_SUBSCRIPTION_ORIGIN = productionSubscriptionOrigin;
+  commandLine["user-data"] ??= path.join(repositoryRoot, "bin", "production-user-data");
+  console.log(`Starting local client against ${productionAccountBaseURL}`);
+}
 
 let interrupted = false;
 let daemonProcess: ChildProcess | null = null;
@@ -189,7 +199,10 @@ async function main(): Promise<number> {
     singBoxDirectory,
     );
   }
-  const workingDirectory = fs.mkdtempSync("/tmp/sing-box-desktop-development-");
+  const workingDirectory = commandLine.production
+    ? path.join(repositoryRoot, "bin", "production-daemon")
+    : fs.mkdtempSync("/tmp/sing-box-desktop-development-");
+  fs.mkdirSync(workingDirectory, { recursive: true });
   const socketPath = path.join(workingDirectory, "daemon.sock");
   daemonProcess = spawn(
     daemonPath,
@@ -218,7 +231,9 @@ async function main(): Promise<number> {
         daemonProcess.kill("SIGKILL");
       }
     }
-    fs.rmSync(workingDirectory, { recursive: true, force: true });
+    if (!commandLine.production) {
+      fs.rmSync(workingDirectory, { recursive: true, force: true });
+    }
   }
 }
 

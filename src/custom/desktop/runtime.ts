@@ -20,6 +20,7 @@ import { Preference } from "../../main/database";
 import { ServiceStatus_Type } from "../../shared/gen/daemon/started_service_pb";
 import type { ProfileMetadata } from "../../shared/ipc";
 import { parseProxySnapshot, readWindowsProxy, writeWindowsProxy, systemProxyConfig } from "./windowsProxy";
+import { enableMacosProxy, restoreMacosProxy, recoverMacosProxy, macosProxyEnabled } from "./macosProxy";
 import type { ProxySnapshot } from "./windowsProxy";
 
 const deviceIdentity = new Preference<string>("custom_device_id", crypto.randomUUID(), (value) => { if (typeof value !== "string" || !/^[0-9a-f-]{36}$/i.test(value)) throw new Error("invalid device identity"); return value; });
@@ -70,6 +71,7 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
   let proxyCheckedAt = 0;
   const recoveryPath = join(app.getPath("userData"), "custom-proxy-recovery.enc");
   const restoreProxy = async () => {
+    if (process.platform === "darwin") await restoreMacosProxy();
     if (snapshot) {
       const current = await readWindowsProxy();
       // A different proxy belongs to an external change; do not overwrite it.
@@ -156,6 +158,12 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
         proxyVerified = true; proxyCheckedAt = Date.now();
         return;
       }
+      if (process.platform === "darwin") {
+        const prepared = systemProxyConfig(content);
+        await startServiceWithContent(prepared.content);
+        await enableMacosProxy(prepared.server);
+        return;
+      }
       await startServiceWithContent(content);
       const status = await managed.getSystemProxyStatus({}, { timeoutMs: 5000 });
       if (!status.available) throw new Error("system proxy unavailable");
@@ -190,6 +198,7 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
   let initializationFailed = false;
   let initializationStage = "读取代理恢复记录";
   const ready = (async () => {
+    if (process.platform === "darwin") await recoverMacosProxy();
     if (process.platform === "win32" && encryptionAvailable()) {
       try {
         const recovery = JSON.parse(safeStorage.decryptString(await readFile(recoveryPath))) as { snapshot: unknown; server: unknown; profileId: unknown };
@@ -297,6 +306,8 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
             proxyCheckedAt = Date.now();
           }
           controller.reconcile(running && (!startedProfileId || profilesState().selectedId === startedProfileId), !!snapshot && proxyVerified, upload, download);
+        } else if (process.platform === "darwin") {
+          controller.reconcile(running && (!startedProfileId || profilesState().selectedId === startedProfileId), await macosProxyEnabled(), upload, download);
         } else {
           const proxy = running ? await requireManaged().getSystemProxyStatus({}, { timeoutMs: 2000 }) : null;
           controller.reconcile(running, proxy?.enabled ?? false, upload, download);

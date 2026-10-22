@@ -3,6 +3,8 @@ const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 
+const { execFileSync } = require("node:child_process");
+
 const sentinel = Buffer.from("dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX");
 const expectedFuses = [
   ["runAsNode", "0"],
@@ -17,19 +19,25 @@ const expectedFuses = [
 ];
 
 exports.afterSign = async (context) => {
-  const asarPath = path.join(context.appOutDir, "resources", "app.asar");
+  const mac = context.electronPlatformName === "darwin";
+  const contents = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, "Contents");
+  const asarPath = mac ? path.join(contents, "Resources", "app.asar") : path.join(context.appOutDir, "resources", "app.asar");
   const executablePath = path.join(
     context.appOutDir,
     `${context.packager.appInfo.productFilename}${context.electronPlatformName === "win32" ? ".exe" : ""}`,
   );
-  const executable = await fs.readFile(executablePath);
+  const executable = await fs.readFile(mac ? path.join(contents, "Frameworks", "Electron Framework.framework", "Electron Framework") : executablePath);
   const currentAsarHash = crypto
     .createHash("sha256")
     .update(asar.getRawHeader(asarPath).headerString)
     .digest("hex");
   const currentAsarHashBuffer = Buffer.from(currentAsarHash);
   const asarHashPosition = executable.indexOf(currentAsarHashBuffer);
-  if (
+  if (mac) {
+    const plist = JSON.parse(execFileSync("/usr/bin/plutil", ["-convert", "json", "-o", "-", path.join(contents, "Info.plist")], { encoding: "utf8" }));
+    const integrity = plist.ElectronAsarIntegrity?.["Resources/app.asar"];
+    if (integrity?.algorithm !== "SHA256" || integrity.hash !== currentAsarHash) throw new Error("macOS app.asar integrity metadata mismatch");
+  } else if (
     asarHashPosition === -1 ||
     executable.lastIndexOf(currentAsarHashBuffer) !== asarHashPosition
   ) {

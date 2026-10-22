@@ -592,10 +592,51 @@ async function packageLinux() {
   }
 }
 
+async function packageMac() {
+  if (process.platform !== "darwin") throw new Error("Mac packaging requires macOS/Xcode");
+  const requested = packageArguments.length ? packageArguments : ["x64", "arm64"];
+  for (const arch of requested) if (!["x64", "arm64"].includes(arch)) throw new Error(`unknown Mac architecture: ${arch}`);
+  runChecked("electron-vite", ["build"]);
+  const iconset = path.join(repositoryRoot, "bin", "kukuhou.iconset");
+  fs.mkdirSync(iconset, { recursive: true });
+  for (const size of [16, 32, 128, 256, 512]) {
+    for (const scale of [1, 2]) runChecked("sips", ["-z", String(size * scale), String(size * scale), "resources/kukuhou-icon.png", "--out", path.join(iconset, `icon_${size}x${size}${scale === 2 ? "@2x" : ""}.png`)]);
+  }
+  runChecked("iconutil", ["-c", "icns", iconset, "-o", "resources/icon.icns"]);
+  for (const arch of requested) {
+    const target = arch === "x64" ? "x86_64" : "arm64";
+    const directory = path.join(repositoryRoot, "bin", "darwin", arch);
+    await buildBoxdd("darwin", arch === "x64" ? "amd64" : "arm64", path.join(directory, "sing-box-daemon"));
+    for (const [source, output] of [["main", "macos-proxy"], ["supervisor", "daemon-supervisor"]]) {
+      runChecked("xcrun", ["swiftc", "-module-cache-path", path.join(repositoryRoot, "bin", "swift-module-cache"), "-target", `${target}-apple-macos12.0`, "-O", `native/macos-proxy/${source}.swift`, "-o", path.join(directory, output)]);
+    }
+    for (const binary of ["sing-box-daemon", "macos-proxy", "daemon-supervisor"]) {
+      const file = path.join(directory, binary);
+      fs.chmodSync(file, 0o755);
+      runChecked("lipo", [file, "-verify_arch", target]);
+      runChecked("codesign", ["--force", "--sign", "-", file]);
+    }
+    await buildElectronApplication({
+      projectDir: repositoryRoot,
+      targets: Platform.MAC.createTarget(["dmg", "zip"], arch === "x64" ? Arch.x64 : Arch.arm64),
+      publish: "never",
+      config: {
+        extends: path.join(repositoryRoot, "electron-builder.yml"),
+        extraMetadata: { version: readApplicationVersion() },
+        npmRebuild: false,
+        electronDist: process.env.KUKUHOU_ELECTRON_DIST
+          ? path.resolve(process.env.KUKUHOU_ELECTRON_DIST, arch)
+          : arch === process.arch ? path.join(repositoryRoot, "node_modules", "electron", "dist") : undefined,
+        mac: { identity: unsignedPackage ? "-" : undefined },
+      },
+    });
+  }
+}
+
 async function main(): Promise<void> {
   if (unsignedPackage) {
-    if (packageMode !== "win" && packageMode !== "win-architecture") {
-      throw new Error("--unsigned is only supported for Windows packages");
+    if (packageMode !== "win" && packageMode !== "win-architecture" && packageMode !== "mac") {
+      throw new Error("--unsigned is only supported for Windows and Mac packages");
     }
     if (process.env.CSC_LINK || process.env.WIN_CSC_LINK) {
       throw new Error("Unset CSC_LINK and WIN_CSC_LINK for unsigned packaging");
@@ -613,6 +654,9 @@ async function main(): Promise<void> {
       break;
     case "win-architecture":
       await packageWindowsArchitecture(packageArguments[0] ?? "");
+      break;
+    case "mac":
+      await packageMac();
       break;
     case "linux":
       await packageLinux();

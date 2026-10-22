@@ -26,6 +26,7 @@
     "generate": "tsx scripts/generate.ts",
     "icons": "tsx scripts/icons.ts",
     "dev": "tsx scripts/development.ts",
+    "prod": "tsx scripts/development.ts --production",
     "dev:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/development-windows.ps1",
     "prod:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/development-windows.ps1 -Environment production",
     "build": "electron-vite build",
@@ -41,7 +42,8 @@
     "package:linux:rpm": "tsx scripts/package.ts linux rpm",
     "package:linux:pacman": "tsx scripts/package.ts linux pacman",
     "postinstall": "electron-builder install-app-deps",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "package:mac": "tsx scripts/package.ts mac --unsigned x64 arm64"
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.72.0",

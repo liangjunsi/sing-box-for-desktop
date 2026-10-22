@@ -1,5 +1,6 @@
 import { app } from "electron";
 import {
+  chmodSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -74,6 +75,12 @@ function secureLinuxApplicationUserData(userDataPath: string): void {
   process.umask(0o077);
   mkdirSync(userDataPath, { recursive: true, mode: 0o700 });
   const rootInfo = lstatSync(userDataPath);
+  // Earlier Mac development builds created this owned directory with 0755.
+  // Migrate it to private permissions without following a symlink.
+  if (process.platform === "darwin" && rootInfo.isDirectory() && !rootInfo.isSymbolicLink() && rootInfo.uid === userId) {
+    chmodSync(userDataPath, 0o700);
+    rootInfo.mode = (rootInfo.mode & ~0o777) | 0o700;
+  }
   if (
     !rootInfo.isDirectory() ||
     rootInfo.isSymbolicLink() ||
@@ -87,7 +94,7 @@ function secureLinuxApplicationUserData(userDataPath: string): void {
 }
 
 export function secureApplicationUserData(userDataPath: string): void {
-  if (process.platform === "linux") {
+  if (process.platform === "linux" || process.platform === "darwin") {
     secureLinuxApplicationUserData(userDataPath);
     return;
   }

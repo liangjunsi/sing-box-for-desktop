@@ -99,6 +99,12 @@ applies. The menu includes the full manager, logs, startup preference and exit.
 
 ### Login service contract
 
+On macOS/Linux, `pnpm prod` starts the local desktop and daemon against
+`https://chat.kukuhou.com`, disables the development login adapter, and trusts
+`https://sub.kukuhou.com` for subscription downloads. It sends real API requests
+and uses `bin/production-user-data` and `bin/production-daemon` for persistent
+local data. This command runs from source without packaging an installer.
+
 On Windows, `pnpm dev:win` starts the local development login adapter (configure
 its subscription URL below). `pnpm prod:win` starts the same local desktop and
 daemon against `https://chat.kukuhou.com`, explicitly disabling the development
