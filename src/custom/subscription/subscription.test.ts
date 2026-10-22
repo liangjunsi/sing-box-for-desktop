@@ -46,3 +46,22 @@ test("rejects empty subscriptions, invalid ports and unsupported transports", ()
   assert.throws(() => parseNode(`vless://${uuid}@example.com:0`), /port/);
   assert.throws(() => parseNode(`vless://${uuid}@example.com:443?type=xhttp`), /transport/);
 });
+
+test("imports explicit SPKI pins without treating certificate hashes as public keys", () => {
+  const pin = Buffer.alloc(32, 255).toString("base64");
+  const url = `hy2://password@example.com:443?insecure=1&pinSHA256PublicKey=${encodeURIComponent(pin)}`;
+  const config = JSON.parse(normalizeSubscription(url).content);
+  assert.deepEqual(config.outbounds[1].tls, { enabled: true, insecure: true, certificate_public_key_sha256: [pin] });
+  assert.throws(() => parseNode(`${url}&pinSHA256=${"ab".repeat(32)}`), /pinSHA256 certificate/);
+  assert.throws(() => parseNode(`${url}&pinSHA256=&pinSHA256=abc`), /pinSHA256 certificate/);
+  for (const invalid of ["", "invalid", Buffer.alloc(31).toString("base64"), Buffer.alloc(33).toString("base64"), pin.replace(/=$/, ""), `${"A".repeat(42)}B=`]) {
+    assert.throws(() => parseNode(`hy2://password@example.com?pinSHA256PublicKey=${encodeURIComponent(invalid)}`), /Invalid TLS public-key/);
+  }
+  assert.throws(() => parseNode(`${url}&pinSHA256PublicKey=${encodeURIComponent(pin)}`), /Invalid TLS public-key/);
+  assert.throws(() => parseNode(`vless://${uuid}@example.com?pinSHA256PublicKey=${encodeURIComponent(pin)}`), /Unsupported public-key/);
+  assert.throws(() => parseNode(`vless://${uuid}@example.com?security=reality&pbk=key&pinSHA256PublicKey=${encodeURIComponent(pin)}`), /Unsupported public-key/);
+  assert.throws(() => parseNode(`vless://${uuid}@example.com?pinSHA256=abc`), /pinSHA256 certificate/);
+  const vmess = (extra: Record<string, unknown>) => `vmess://${Buffer.from(JSON.stringify({ add: "example.com", port: 443, id: uuid, tls: "tls", ...extra })).toString("base64")}`;
+  assert.deepEqual((parseNode(vmess({ pinSHA256PublicKey: pin })).tls as Record<string, unknown>).certificate_public_key_sha256, [pin]);
+  assert.throws(() => parseNode(vmess({ pinSHA256: "certificate-pin", pinSHA256PublicKey: pin })), /pinSHA256 certificate/);
+});

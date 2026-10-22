@@ -25,10 +25,16 @@ export function parseSession(value: unknown, token?: string): AccountSession {
   if (typeof accessToken !== "string" || !accessToken || typeof data.expiresAt !== "string" ||
     !Number.isFinite(Date.parse(data.expiresAt)) || Date.parse(data.expiresAt) <= Date.now() ||
     typeof data.user?.id !== "string" || !data.user.id || typeof data.user.displayName !== "string" ||
-    typeof data.subscriptionUrl !== "string") throw new AccountError("登录服务返回格式错误");
-  try { secureURL(data.subscriptionUrl); } catch { throw new AccountError("订阅地址无效"); }
+    (data.subscriptionUrl !== null && typeof data.subscriptionUrl !== "string")) throw new AccountError("登录服务返回格式错误");
+  try { if (data.subscriptionUrl !== null) secureURL(data.subscriptionUrl); } catch { throw new AccountError("订阅地址无效"); }
   if (!["active", "pending", "expired", "quota_exhausted"].includes(data.subscriptionStatus ?? "")) throw new AccountError("订阅状态格式错误");
-  return { subscriptionStatus: data.subscriptionStatus, accessToken, expiresAt: data.expiresAt, user: { id: data.user.id, displayName: data.user.displayName }, subscriptionUrl: data.subscriptionUrl };
+  for (const field of ["usedBytes", "quotaBytes"] as const) {
+    const number = data[field];
+    if (number !== undefined && (typeof number !== "number" || !Number.isFinite(number) || !Number.isInteger(number) || number < 0)) throw new AccountError("套餐用量格式错误");
+  }
+  if (data.usageMonth !== undefined && (typeof data.usageMonth !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(data.usageMonth))) throw new AccountError("统计月份格式错误");
+  if (data.subscriptionExpiresAt !== undefined && data.subscriptionExpiresAt !== null && (typeof data.subscriptionExpiresAt !== "string" || !/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(data.subscriptionExpiresAt) || !Number.isFinite(Date.parse(data.subscriptionExpiresAt)))) throw new AccountError("套餐到期时间格式错误");
+  return { usedBytes: data.usedBytes, quotaBytes: data.quotaBytes, usageMonth: data.usageMonth, subscriptionExpiresAt: data.subscriptionExpiresAt, subscriptionStatus: data.subscriptionStatus, accessToken, expiresAt: data.expiresAt, user: { id: data.user.id, displayName: data.user.displayName }, subscriptionUrl: data.subscriptionUrl };
 }
 
 export class AccountApi {

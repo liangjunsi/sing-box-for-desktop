@@ -9,6 +9,7 @@ async function call<T>(method: string, ...args: unknown[]): Promise<T> {
   return result.value as T;
 }
 export const customBridge: CustomBridge = {
+  resize: (height) => call("resize", height),
   state: () => call("state"), login: (account, password, remember) => call("login", account, password, remember),
   logout: () => call("logout"), refresh: () => call("refresh"), connect: () => call("connect"), disconnect: () => call("disconnect"),
   select: (tag) => call("select", tag), advanced: (route) => call("advanced", route),

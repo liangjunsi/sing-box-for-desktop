@@ -36,7 +36,7 @@ export function NodePicker({ nodes, selected, disabled, onSelect }: {
     {expanded && <div className="kc-options" id="kc-node-options" role="listbox" aria-label="服务器节点">
       {matches.map((node, position) => <div id={`kc-node-option-${position}`} key={node.tag} role="option" aria-selected={node.tag === selected}
         className={position === index ? "kc-option-active" : ""} onMouseDown={(event) => event.preventDefault()}
-        onMouseEnter={() => setActive(position)} onClick={() => void choose(node.tag)}>{node.tag}{node.tag === selected && <span>✓</span>}</div>)}
+        onMouseEnter={() => setActive(position)} onClick={() => void choose(node.tag)}>{node.tag}{node.tag === selected ? " ✓" : ""}</div>)}
       {!matches.length && <div className="kc-no-options">没有匹配的节点</div>}
     </div>}
   </div>;

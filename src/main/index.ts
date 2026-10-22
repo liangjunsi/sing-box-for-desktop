@@ -39,7 +39,7 @@ import { registerCustomDesktop } from "../custom/desktop/runtime";
 import { attachCompactWindow, compactWindowOptions, openAdvancedWindow, isAdvancedWindow } from "../custom/desktop/windows";
 import { registerSetup } from "./repair";
 import { registerReports } from "./reports";
-import { resourcePath } from "./resources";
+import { resourcePath, windowIconPath } from "./resources";
 import { registerServers } from "./servers";
 import {
   registerSettings,
@@ -111,7 +111,7 @@ function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
     show: false,
     ...compactWindowOptions(),
-    icon: resourcePath("icons", "512x512.png"),
+    icon: windowIconPath(),
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.cjs"),
       contextIsolation: true,
@@ -366,7 +366,22 @@ if (!singleInstanceLock) {
 } else {
   app.setAsDefaultProtocolClient("sing-box");
   if (process.platform === "win32") {
-    app.setAppUserModelId("io.nekohasekai.sfw");
+    const appId = app.isPackaged ? "io.nekohasekai.sfw" : "com.kukuhou.desktop.development";
+    app.setAppUserModelId(appId);
+    // The development executable still carries Electron's icon. Give the
+    // Windows taskbar explicit application details for every window.
+    app.on("browser-window-created", (_event, window) => {
+      const quoteArgument = (argument: string) =>
+        `"${argument.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/g, "$1$1")}"`;
+      window.setAppDetails({
+        appId,
+        appIconPath: resourcePath("icon.ico"),
+        appIconIndex: 0,
+        relaunchDisplayName: "kukuhou",
+        relaunchCommand: [process.execPath, ...process.argv.slice(1)].map(quoteArgument).join(" "),
+      });
+      window.setIcon(windowIconPath());
+    });
   }
 
   app.on("second-instance", (_event, argv, workingDirectory) => {

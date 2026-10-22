@@ -5,6 +5,7 @@ const auth = { origin: "https://example.invalid", headers: { Authorization: "Bea
 test("account subscription sends credentials only to trusted HTTPS origin and refuses redirects", async () => {
   let calls = 0;
   const request: typeof fetch = async (_url, init) => {
+    assert.equal(new Headers(init?.headers).get("X-Kukuhou-Subscription-Format"), "sing-box-v1");
     calls++; assert.equal(init?.redirect, "error"); assert.equal(new Headers(init?.headers).get("Authorization"), "Bearer synthetic"); assert.equal(new Headers(init?.headers).get("X-Client-Device-Id"), "synthetic-device");
     return new Response('{"outbounds":[{"type":"direct","tag":"direct"}]}');
   };

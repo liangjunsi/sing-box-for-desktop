@@ -7,3 +7,9 @@ export function resourcePath(...segments: string[]): string {
   }
   return join(app.getAppPath(), "resources", ...segments);
 }
+
+export function windowIconPath(): string {
+  return process.platform === "win32"
+    ? resourcePath("icon.ico")
+    : resourcePath("icons", "512x512.png");
+}

@@ -64,6 +64,8 @@ win:
     signingHashAlgorithms:
       - sha256
   extraResources:
+    - from: resources/icon.ico
+      to: icon.ico
     - from: resources/tray.ico
       to: tray.ico
     - from: resources/trayStopped.ico

@@ -14,7 +14,7 @@ import { desktopLanguageFromLocale, translateDesktop } from "../shared/translati
 import { captureRuntimeCrash } from "./appReports";
 import { developmentRendererURL } from "./development";
 import { preferredLocale } from "./locale";
-import { resourcePath } from "./resources";
+import { windowIconPath } from "./resources";
 import { titleBarOverlay } from "./titleBarOverlay";
 
 export function registerTerminalWindows(onAllClosed: () => void): Set<BrowserWindow> {
@@ -86,7 +86,7 @@ export function registerTerminalWindows(onAllClosed: () => void): Set<BrowserWin
       titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
       trafficLightPosition: process.platform === "darwin" ? { x: 18, y: 19 } : undefined,
       titleBarOverlay: overlay,
-      icon: process.platform === "linux" ? resourcePath("icons", "512x512.png") : undefined,
+      icon: windowIconPath(),
       webPreferences: {
         preload: join(import.meta.dirname, "../preload/index.cjs"),
         contextIsolation: true,

@@ -9,7 +9,7 @@ export interface AccountSubscriptionAuth {
 export async function fetchAccountSubscription(url: string, auth: AccountSubscriptionAuth, userAgent: string, request: typeof fetch = fetch): Promise<string> {
   const target = new URL(url);
   if (target.protocol !== "https:" || target.origin !== auth.origin || target.username || target.password) throw new Error("Untrusted account subscription origin");
-  const response = await request(target, { headers: { "User-Agent": userAgent, ...auth.headers }, redirect: "error", signal: AbortSignal.timeout(15_000) });
+  const response = await request(target, { headers: { ...auth.headers, "User-Agent": userAgent, "X-Kukuhou-Subscription-Format": "sing-box-v1" }, redirect: "error", signal: AbortSignal.timeout(15_000) });
   if (response.status !== 200) { await response.body?.cancel(); throw auth.rejected(response.status); }
   const maximum = 16 * 1024 * 1024;
   if (Number(response.headers.get("content-length")) > maximum) { await response.body?.cancel(); throw new Error("Account subscription too large"); }
