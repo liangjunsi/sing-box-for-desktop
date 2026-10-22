@@ -199,15 +199,15 @@ export function initializeTray(open: () => void) {
 
 function createElectronTray() {
   tray = new Tray(trayIcon());
-  tray.setToolTip("sing-box");
   if (process.platform === "win32") {
-    prepareTrayMenuWindow(tray.getBounds());
-    const popMenu = (bounds: Rectangle) => {
-      if (showCustomTrayMenu(bounds)) return;
-      void showTrayMenu(bounds);
+    const popMenu = () => {
+      const anchor = cursorAnchor();
+      const popup = (menu: Menu) => tray?.popUpContextMenu(menu, { x: anchor.x, y: anchor.y });
+      if (showCustomTrayMenu(anchor, popup)) return;
+      popup(Menu.buildFromTemplate(buildTrayTemplate()));
     };
-    tray.on("click", (_event, bounds) => popMenu(bounds));
-    tray.on("right-click", (_event, bounds) => popMenu(bounds));
+    tray.on("click", popMenu);
+    tray.on("right-click", popMenu);
     tray.on("double-click", () => {
       hideTrayMenu();
       openWindow();

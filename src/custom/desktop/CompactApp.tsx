@@ -3,7 +3,6 @@ import type { FormEvent } from "react";
 import type { CompactState } from "./contracts";
 import { NodePicker } from "./NodePicker";
 import { Toast } from "./Toast";
-import { LegalNotice } from "./LegalNotice";
 import "./compact.css";
 import { planDisplay } from "./planDisplay";
 
@@ -18,7 +17,6 @@ export function CompactApp() {
   const [account, setAccount] = useState(""); const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [menu, setMenu] = useState(false); const [pending, setPending] = useState(false);
-  const [legal, setLegal] = useState(false);
   const [error, setError] = useState(""); const [openAtLogin, setOpenAtLogin] = useState(false);
   const custom = window.desktop.custom;
   const developmentFilled = useRef(false);
@@ -73,7 +71,6 @@ export function CompactApp() {
         <div className="kc-menu">
           {state.user && <button disabled={busy} onClick={() => { setMenu(false); void run(() => custom.refresh()); }}>更新订阅</button>}
           <button disabled={pending} onClick={() => { void run(async () => { await window.desktop.settings.setOpenAtLogin(!openAtLogin); setOpenAtLogin(!openAtLogin); }); }}>开机启动 {openAtLogin ? "✓" : ""}</button>
-          <button onClick={() => { setMenu(false); setLegal(true); }}>关于与开源许可</button>
           {state.user && <button disabled={busy} onClick={() => { setMenu(false); void run(() => custom.logout()); }}>退出登录</button>}
           <button onClick={() => { void run(() => window.desktop.app.quit()); }}>退出程序</button>
         </div></>}
@@ -101,6 +98,5 @@ export function CompactApp() {
         <div className={plan.expiryTone} title={plan.expiryTitle}><span>套餐到期</span><strong>{plan.expiry}</strong>{plan.expiryStatus && <small>{plan.expiryStatus}</small>}</div>
       </div>
     </section>}
-    {legal && <LegalNotice onClose={() => setLegal(false)} />}
   </main>;
 }

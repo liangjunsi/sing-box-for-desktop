@@ -57,8 +57,8 @@ async function load(): Promise<SavedAccount | null> {
   } catch { return null; }
 }
 
-let accountTrayMenu: ((bounds: Rectangle) => boolean) | null = null;
-export function showCustomTrayMenu(bounds: Rectangle): boolean { return accountTrayMenu?.(bounds) ?? false; }
+let accountTrayMenu: ((bounds: Rectangle, popup: (menu: Menu) => void) => boolean) | null = null;
+export function showCustomTrayMenu(bounds: Rectangle, popup: (menu: Menu) => void): boolean { return accountTrayMenu?.(bounds, popup) ?? false; }
 
 export function registerCustomDesktop(openAdvanced: (route?: string) => void, openCompact: () => void): void {
   let activeProfileId: string | undefined;
@@ -229,18 +229,18 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
     controller.state.error = `初始化失败：${initializationStage}${safeCode}，请重启后重试`;
     console.error(`custom desktop initialization failed: ${initializationStage}${safeCode}`);
   });
-  accountTrayMenu = (bounds) => {
+  accountTrayMenu = (_bounds, popup) => {
     if (!controller.state.user || !activeProfileId || profilesState().selectedId !== activeProfileId) return false;
     const state = controller.state;
     const disconnect = state.phase === "connected" || state.phase === "failed";
     const action = (operation: () => Promise<void>) => { void operation().catch(() => openCompact()); };
-    Menu.buildFromTemplate([
+    popup(Menu.buildFromTemplate([
       { label: "打开 Kukuhou", click: openCompact },
       { label: disconnect ? "断开连接" : "连接系统代理", enabled: !state.loading && (disconnect || state.nodes.length > 0), click: () => action(() => disconnect ? controller.disconnect() : controller.connect()) },
       { label: "服务器节点", submenu: state.nodes.map((node) => ({ label: node.tag, type: "radio" as const, checked: state.selected === node.tag, enabled: !state.loading, click: () => action(() => controller.select(node.tag)) })) },
       { label: "更新订阅", enabled: !state.loading, click: () => action(() => controller.refresh()) },
       { type: "separator" }, { label: "退出", click: () => app.quit() },
-    ]).popup({ x: Math.round(bounds.x), y: Math.round(bounds.y) });
+    ]));
     return true;
   };
   ipcMain.handle(CUSTOM_CALL, async (_event, method: unknown, ...args: unknown[]) => {
