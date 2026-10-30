@@ -69,6 +69,12 @@ export function CompactApp() {
       <button className="kc-menu-toggle" aria-label="设置菜单" aria-expanded={menu} onClick={() => setMenu(!menu)}>☰</button>
       {menu && <><button className="kc-dismiss" aria-label="关闭菜单" onClick={() => setMenu(false)} />
         <div className="kc-menu">
+          {state.user && <div className="kc-menu-usage" aria-label="本月用量">
+            <span>本月已用</span>
+            <strong className={plan.usageTone} title={plan.usageTitle}>{plan.usagePercent === undefined ? "暂无数据" : `${plan.usagePercent.toFixed(1)}%`}</strong>
+            {plan.usagePercent !== undefined && <progress className={`kc-usage-progress ${plan.usageTone}`} max={100} value={plan.usagePercent} aria-label="本月已用比例" title={plan.usageTitle} />}
+            {plan.usageStatus && <small className={plan.usageTone}>{plan.usageStatus}</small>}
+          </div>}
           {state.user && <button disabled={busy} onClick={() => { setMenu(false); void run(() => custom.refresh()); }}>更新订阅</button>}
           <button disabled={pending} onClick={() => { void run(async () => { await window.desktop.settings.setOpenAtLogin(!openAtLogin); setOpenAtLogin(!openAtLogin); }); }}>开机启动 {openAtLogin ? "✓" : ""}</button>
           {state.user && <button disabled={busy} onClick={() => { setMenu(false); void run(() => custom.logout()); }}>退出登录</button>}
@@ -94,7 +100,6 @@ export function CompactApp() {
       </div>
       <div className="kc-traffic"><div><span>↓ 下载</span><strong>{rate(state.download)}</strong></div><div><span>↑ 上传</span><strong>{rate(state.upload)}</strong></div></div>
       <div className="kc-plan" aria-label="套餐信息">
-        <div className={plan.usageTone} title={plan.usageTitle}><span>本月已用</span><strong>{plan.usage}</strong>{plan.usageStatus && <small>{plan.usageStatus}</small>}</div>
         <div className={plan.expiryTone} title={plan.expiryTitle}><span>套餐到期</span><strong>{plan.expiry}</strong>{plan.expiryStatus && <small>{plan.expiryStatus}</small>}</div>
       </div>
     </section>}

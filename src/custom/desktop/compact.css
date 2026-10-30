@@ -13,6 +13,14 @@
 .kc-menu { position: absolute; left: 12px; top: 38px; z-index: 10; width: 165px; padding: 5px; border: 1px solid #e1e6ef; border-radius: 12px; background: #fff; box-shadow: 0 12px 30px #1c2a4426; -webkit-app-region: no-drag; }
 .kc-menu button { display: block; width: 100%; padding: 9px 12px; text-align: left; background: transparent; border: 0; border-radius: 7px; color: #17243b; }
 .kc-menu button:hover { background: #f0f4fb; }
+.kc-menu-usage { margin: 0 5px 4px; padding: 9px 7px 12px; border-bottom: 1px solid #e0e6ee; }
+.kc-menu-usage strong { font-size: 12px; letter-spacing: normal; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kc-menu-usage small { display: block; margin-top: 3px; font-size: 11px; }
+.kc-menu-usage .warning { color: #a65b00; }
+.kc-menu-usage .danger { color: #b42332; }
+.kc-usage-progress { display: block; width: 100%; height: 6px; margin-top: 7px; border: 0; border-radius: 3px; overflow: hidden; appearance: none; background: #e5eaf3; color: #758198; }
+.kc-usage-progress::-webkit-progress-bar { background: #e5eaf3; border-radius: 3px; }
+.kc-usage-progress::-webkit-progress-value { background: currentColor; border-radius: 3px; }
 .kc-login { margin-top: 4px; }
 .kc-login h1 { font-size: 21px; margin: 0 0 5px; }
 .kc-login p { color: #758198; margin: 0 0 18px; }
@@ -56,8 +64,7 @@ html:has(.kukuhou-compact), body:has(.kukuhou-compact) { margin: 0; padding: 0; 
 .kc-legal summary { cursor: pointer; color: #2563eb; }
 .kc-legal pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.5 monospace; }
 
-.kc-plan { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #e0e6ee; }
-.kc-plan > div:last-child { text-align: right; }
+.kc-plan { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e0e6ee; text-align: center; }
 .kc-plan span { display: block; font-size: 10px; color: #758198; }
 .kc-plan strong { display: block; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .kc-plan small { display: block; font-size: 10px; }
