@@ -52,7 +52,7 @@ function fixture(saved: SavedAccount | null = null, selections: Record<string, s
     return Response.json(responseSession);
   });
   const controller = new CompactController(api, deps);
-  return { controller, events, requests, responseSession: (value: AccountSession) => { responseSession = value; }, saved: () => saved,
+  return { deps, controller, events, requests, responseSession: (value: AccountSession) => { responseSession = value; }, saved: () => saved,
     content: (value: string) => { content = value; }, failSync: () => { failSync = true; }, failStart: () => { failStart = true; },
     failStop: (value = true) => { failStop = value; }, invalid: () => { invalid = true; }, network: (value = true) => { network = value; }, serviceStatus: (value: number) => { serviceStatus = value; }, encryption: () => { encryption = false; } };
 }
@@ -135,6 +135,36 @@ test("failed connection rolls back service/proxy and supports retry", async () =
   const f = fixture(); await f.controller.login("test", "test", true); f.failStart();
   await assert.rejects(f.controller.connect()); assert.ok(f.events.includes("stop")); assert.equal(f.controller.state.phase, "failed");
   await f.controller.disconnect(); assert.equal(f.controller.state.phase, "idle");
+});
+
+test("routing edits stay deferred while connected and apply on reconnect", async () => {
+  const f = fixture(); await f.controller.login("test", "test", true); await f.controller.connect();
+  const version = f.controller.state.activeRoutingVersion;
+  const starts = f.events.filter(e => e === "start").length;
+  await f.controller.setRoutingMode("global");
+  assert.equal(f.controller.state.routingPending, true);
+  await f.controller.setRoutingMode("smart"); assert.equal(f.controller.state.routingPending, false);
+  await f.controller.setRoutingMode("global");
+  await f.controller.saveRoutingRule({ id: "rule1", type: "domain", target: "EXAMPLE.COM.", scope: "suffix", action: "direct" });
+  assert.equal(f.controller.state.activeRoutingMode, "smart");
+  assert.equal(f.controller.state.activeRoutingVersion, version);
+  assert.equal(f.controller.state.routing.rules[0].target, "example.com");
+  assert.equal(f.events.filter(e => e === "start").length, starts);
+  await assert.rejects(f.controller.saveRoutingRule({ id: "rule2", type: "domain", target: "example.com", scope: "suffix", action: "proxy" }), /已存在/);
+  await f.controller.disconnect(); await f.controller.connect();
+  assert.equal(f.controller.state.activeRoutingMode, "global");
+  assert.equal(f.controller.state.activeRoutingVersion, f.controller.state.routing.version);
+  await f.controller.deleteRoutingRule("rule1"); assert.equal(f.controller.state.routing.rules.length, 0);
+  await f.controller.logout(); assert.equal(f.controller.state.routing.mode, "global");
+});
+
+test("routing save failures preserve saved settings and invalid input reports specific errors", async () => {
+  const f = fixture(); const original = structuredClone(f.controller.state.routing);
+  f.deps.saveRouting = () => { throw new Error("disk unavailable"); };
+  await assert.rejects(f.controller.setRoutingMode("global"), /保存失败/);
+  assert.deepEqual(f.controller.state.routing, original);
+  await assert.rejects(f.controller.saveRoutingRule({ id: "invalid", type: "domain", target: "https://example.com/path", scope: "suffix", action: "proxy" }), /不包含/);
+  assert.deepEqual(f.controller.state.routing, original);
 });
 test("logout clears only account-owned resources after stopping", async () => {
   const f = fixture(); await f.controller.login("test", "test", true); await f.controller.connect();

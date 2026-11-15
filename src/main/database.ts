@@ -1,5 +1,5 @@
 import { app, safeStorage } from "electron";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -166,12 +166,14 @@ export function settingsDatabase(): SettingsDatabase {
     return database;
   }
   mkdirSync(app.getPath("userData"), { recursive: true });
+  const existingUser = existsSync(join(app.getPath("userData"), "settings.db"));
   const store = new SettingsDatabase(
     join(app.getPath("userData"), "settings.db"),
   );
   try {
     store.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
     createSchema(store);
+    store.prepare("INSERT OR IGNORE INTO preferences (name, data) VALUES (?, ?)").run("custom_routing", encodePreference({ mode: existingUser ? "global" : "smart", rules: [], version: 1 }));
     migrateLegacyEncryptedStrings(store);
   } catch (error) {
     store.close();

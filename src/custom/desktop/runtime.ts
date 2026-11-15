@@ -7,11 +7,13 @@ import { join } from "node:path";
 import { configuredAccountApi, productionSubscriptionOrigin } from "./developmentAccount";
 import type { DevelopmentAccountOptions } from "./developmentAccount";
 import { CUSTOM_CALL, CUSTOM_CHANGED } from "./contracts";
-import { fitCompactPage } from "./windows";
+import { fitCompactPage, openRoutingSettingsWindow } from "./windows";
 import { CompactController } from "./controller";
 import type { SavedAccount } from "./controller";
 import { AccountError, trustedSubscriptionOrigin } from "./accountApi";
 import { nodeConfig } from "./config";
+import { defaultRouting, parseRouting, routingConfig } from "./routing";
+import { createHash } from "node:crypto";
 import { callProfileOperation, fetchRemoteContent, startServiceWithContent, selectProfile, profilesState } from "../../main/profiles";
 import { managedService, startedService } from "../../main/daemon";
 import { applicationService } from "../../main/worker";
@@ -30,6 +32,17 @@ const profileIds = new Preference<string[]>("custom_account_profile_ids", [], (v
 });
 function encryptionAvailable() {
   return safeStorage.isEncryptionAvailable() && (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text");
+}
+const routingPreference = new Preference("custom_routing", defaultRouting(), parseRouting);
+async function routingResources() {
+  try {
+    const manifest = JSON.parse((await readFile(resourcePath("routing", "manifest.json"), "utf8")).replace(/^\uFEFF/, "")) as { file: string; sha256: string }[];
+    for (const file of ["geosite-cn.json", "geoip-cn.json"]) {
+      const entry = manifest.find(item => item.file === file);
+      if (!entry || createHash("sha256").update(await readFile(resourcePath("routing", file))).digest("hex") !== entry.sha256) throw new Error();
+    }
+    return { site: JSON.parse(await readFile(resourcePath("routing", "geosite-cn.json"), "utf8")).rules, ip: JSON.parse(await readFile(resourcePath("routing", "geoip-cn.json"), "utf8")).rules };
+  } catch { throw new AccountError("路由规则文件缺失或损坏，请重新安装客户端"); }
 }
 const nodeSelections = new Preference<Record<string, string>>("custom_account_node_selections", {}, (value) => {
   if (!value || typeof value !== "object" || Array.isArray(value) || !Object.values(value).every((tag) => typeof tag === "string")) throw new Error("invalid node selections");
@@ -94,6 +107,7 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
   const deviceId = deviceIdentity.get(); deviceIdentity.set(deviceId);
   const configured = configuredAccountApi(app.isPackaged, process.env.KUKUHOU_API_BASE_URL ?? "", development, deviceId);
   const controller = new CompactController(configured.api, {
+    loadRouting: () => routingPreference.get(), saveRouting: value => routingPreference.set(value),
     load, save,
     loadSelection: (userId) => Object.hasOwn(nodeSelections.get(), userId) ? nodeSelections.get()[userId] : "",
     saveSelection: (userId, selected) => nodeSelections.set({ ...nodeSelections.get(), [userId]: selected }),
@@ -141,9 +155,12 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
       activeProfileId = id;
       return { id, content: formatted, updated: Date.now(), notice: skipped ? `已跳过 ${skipped} 个不兼容节点，其余节点可正常使用` : "" };
     },
-    start: async (content) => {
+    start: async (content, routing) => {
       const managed = requireManaged();
       if (!activeProfileId) throw new Error("missing account profile");
+      content = routingConfig(content, routing, await routingResources());
+      try { await applicationService.checkConfig({ content }); }
+      catch { throw new AccountError("路由运行配置未通过内核校验，请检查订阅或客户端版本"); }
       await selectProfile(activeProfileId);
       startedProfileId = activeProfileId;
       if (process.platform === "win32") {
@@ -263,6 +280,10 @@ export function registerCustomDesktop(openAdvanced: (route?: string) => void, op
       if (initializationFailed && method !== "state" && method !== "advanced" && method !== "licenses") throw new Error();
       switch (method) {
         case "state": return { ok: true, value: controller.state };
+        case "openRoutingSettings": openRoutingSettingsWindow(); break;
+        case "setRoutingMode": await controller.setRoutingMode(args[0] as "smart" | "global"); break;
+        case "saveRoutingRule": await controller.saveRoutingRule(args[0]); break;
+        case "deleteRoutingRule": if (typeof args[0] !== "string") throw new Error(); await controller.deleteRoutingRule(args[0]); break;
         case "licenses": {
           const failure = await shell.openPath(resourcePath("licenses"));
           if (failure) throw new Error();

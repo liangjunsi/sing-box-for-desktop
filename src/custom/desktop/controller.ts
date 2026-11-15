@@ -1,9 +1,12 @@
 import { AccountApi, AccountError } from "./accountApi";
-import type { AccountSession, CompactState } from "./contracts";
+import type { AccountSession, CompactState, RoutingSettings, RoutingMode } from "./contracts";
+import { defaultRouting, normalizeRule, parseRouting } from "./routing";
 import { nodeConfig, selectConfig } from "./config";
 
 export interface SavedAccount { session: AccountSession; profileId?: string; selected: string; lastUpdated?: number }
 export interface AccountDependencies {
+  loadRouting?(): RoutingSettings;
+  saveRouting?(settings: RoutingSettings): void;
   load(): Promise<SavedAccount | null>;
   save(account: SavedAccount | null): Promise<boolean>;
   loadSelection?(userId: string): string;
@@ -11,7 +14,7 @@ export interface AccountDependencies {
   cleanup(keep?: string): Promise<void>;
   sync(session: AccountSession, id?: string): Promise<{ id: string; content: string; updated: number; notice?: string }>;
   read(id: string): Promise<string>;
-  start(content: string): Promise<void>;
+  start(content: string, routing: RoutingSettings): Promise<void>;
   stop(): Promise<void>;
   select(group: string, tag: string): Promise<void>;
   running(): boolean;
@@ -26,15 +29,39 @@ export class CompactController {
   private activeGroup = "";
   private activeNodes: string[] = [];
   private owned = false;
+  private activeRouting?: RoutingSettings;
   private queue: Promise<unknown> = Promise.resolve();
   constructor(private readonly api: AccountApi, private readonly deps: AccountDependencies) {
-    this.state = { configured: !!api.baseURL, user: null, nodes: [], selected: "", phase: "idle", loading: false, error: "", notice: "", upload: 0, download: 0 };
+    this.state = { routing: deps.loadRouting?.() ?? defaultRouting(), configured: !!api.baseURL, user: null, nodes: [], selected: "", phase: "idle", loading: false, error: "", notice: "", upload: 0, download: 0 };
   }
   private updatePlan(cached = false) {
     const session = this.account?.session;
     this.state.plan = session ? { subscriptionStatus: session.subscriptionStatus, usedBytes: session.usedBytes, quotaBytes: session.quotaBytes, usageMonth: session.usageMonth, subscriptionExpiresAt: session.subscriptionExpiresAt } : undefined;
     this.state.planCached = cached;
   }
+  private changeRouting(change: (current: RoutingSettings) => RoutingSettings): Promise<void> {
+    if (this.state.loading) return Promise.reject(new Error("请等待当前操作完成"));
+    return this.operation(async () => {
+      let next: RoutingSettings;
+      try { next = parseRouting(change(structuredClone(this.state.routing))); }
+      catch (error) { throw new AccountError(error instanceof Error ? error.message : "规则格式无效"); }
+      const policyKey = (value: RoutingSettings) => JSON.stringify({ mode: value.mode, rules: value.rules });
+      if (policyKey(next) === policyKey(this.state.routing)) return;
+      next.version = this.state.routing.version + 1;
+      try { this.deps.saveRouting?.(next); } catch { throw new AccountError("路由设置保存失败，请重试"); }
+      this.state.routing = next;
+      this.state.routingPending = !!this.activeRouting && policyKey(next) !== policyKey(this.activeRouting);
+    });
+  }
+  setRoutingMode(mode: RoutingMode): Promise<void> { return this.changeRouting(current => ({ ...current, mode })); }
+  saveRoutingRule(value: unknown): Promise<void> {
+    return this.changeRouting(current => {
+      const rule = normalizeRule(value); const index = current.rules.findIndex(r => r.id === rule.id);
+      if (index < 0) current.rules.push(rule); else current.rules[index] = rule;
+      return current;
+    });
+  }
+  deleteRoutingRule(id: string): Promise<void> { return this.changeRouting(current => ({ ...current, rules: current.rules.filter(r => r.id !== id) })); }
   private emit() { this.deps.changed({ ...this.state, nodes: [...this.state.nodes] }); }
   private operation<T>(action: () => Promise<T>): Promise<T> {
     const result = this.queue.catch(() => {}).then(async () => {
@@ -137,11 +164,14 @@ export class CompactController {
         const content = selectConfig(this.content, this.state.selected);
         this.activeGroup = nodeConfig(content).group;
         this.activeNodes = nodeConfig(content).nodes.map((node) => node.tag);
-        await this.deps.start(content); this.state.phase = "connected";
-      } catch {
+        const routing = structuredClone(this.state.routing);
+        await this.deps.start(content, routing); this.state.phase = "connected";
+        this.state.activeRoutingMode = routing.mode; this.state.activeRoutingVersion = routing.version;
+        this.activeRouting = routing; this.state.routingPending = false;
+      } catch (error) {
         try { await this.deps.stop(); this.owned = false; } catch { /* Keep ownership so cleanup can be retried. */ }
         this.state.phase = "failed";
-        throw new AccountError("连接失败，请检查守护进程与系统代理权限");
+        throw error instanceof AccountError ? error : new AccountError("连接失败，请检查守护进程与系统代理权限");
       }
     });
   }
@@ -151,6 +181,8 @@ export class CompactController {
       await this.deps.stop(); this.owned = false;
     }
     this.state.phase = "idle"; this.state.upload = 0; this.state.download = 0;
+    this.state.activeRoutingMode = undefined; this.state.activeRoutingVersion = undefined;
+    this.activeRouting = undefined; this.state.routingPending = false;
   }
   disconnect(): Promise<void> { return this.operation(() => this.disconnectInternal()); }
   select(tag: string): Promise<void> {

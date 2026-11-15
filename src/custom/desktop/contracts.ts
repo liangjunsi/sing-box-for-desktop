@@ -15,7 +15,20 @@ export interface AccountSession extends AccountPlan {
   subscriptionUrl: string | null;
 }
 export interface CompactNode { tag: string; protocol: string }
+export type RoutingMode = "smart" | "global";
+export interface CustomRoutingRule {
+  id: string;
+  type: "domain" | "ip";
+  target: string;
+  scope: "suffix" | "exact";
+  action: "direct" | "proxy";
+}
+export interface RoutingSettings { mode: RoutingMode; rules: CustomRoutingRule[]; version: number }
 export interface CompactState {
+  routing: RoutingSettings;
+  activeRoutingMode?: RoutingMode;
+  activeRoutingVersion?: number;
+  routingPending?: boolean;
   developmentLogin?: { account: string; password: string };
   plan?: AccountPlan;
   planCached?: boolean;
@@ -32,6 +45,10 @@ export interface CompactState {
   download: number;
 }
 export interface CustomBridge {
+  openRoutingSettings(): Promise<void>;
+  setRoutingMode(mode: RoutingMode): Promise<void>;
+  saveRoutingRule(rule: CustomRoutingRule): Promise<void>;
+  deleteRoutingRule(id: string): Promise<void>;
   state(): Promise<CompactState>;
   resize(height: number): Promise<void>;
   login(account: string, password: string, remember: boolean): Promise<void>;

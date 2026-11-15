@@ -6,7 +6,7 @@ import { Toast } from "./Toast";
 import "./compact.css";
 import { planDisplay } from "./planDisplay";
 
-const initial: CompactState = { configured: false, user: null, nodes: [], selected: "", phase: "idle", loading: true, error: "", notice: "", upload: 0, download: 0 };
+const initial: CompactState = { routing: { mode: "smart", rules: [], version: 1 }, configured: false, user: null, nodes: [], selected: "", phase: "idle", loading: true, error: "", notice: "", upload: 0, download: 0 };
 function rate(value: number) {
   if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB/s`;
   if (value >= 1024) return `${(value / 1024).toFixed(1)} KB/s`;
@@ -62,14 +62,32 @@ export function CompactApp() {
   }
   const plan = planDisplay(state.plan);
   const connected = state.phase === "connected";
-  const labels = { idle: "未连接", connecting: "正在连接…", connected: "已连接 · 系统代理", disconnecting: "正在断开…", failed: "连接异常" };
+  const modeLabel = (mode: string) => mode === "smart" ? "智能分流" : "全局代理";
+  const labels = { idle: "未连接", connecting: "正在连接…", connected: `已连接 · ${modeLabel(state.activeRoutingMode ?? state.routing.mode)}`, disconnecting: "正在断开…", failed: "连接异常" };
   const node = state.nodes.find((item) => item.tag === state.selected);
   return <main className="kukuhou-compact" ref={page}>
     <header className="kc-header">
       <button className="kc-menu-toggle" aria-label="设置菜单" aria-expanded={menu} onClick={() => setMenu(!menu)}>☰</button>
       {menu && <><button className="kc-dismiss" aria-label="关闭菜单" onClick={() => setMenu(false)} />
         <div className="kc-menu">
+          {state.user && <div className="kc-menu-plan" aria-label="套餐信息">
+          <div className="kc-menu-usage" aria-label="套餐到期">
+            <div className="kc-menu-expiry">
+            <span>套餐到期</span>
+            <strong className={plan.expiryTone} title={plan.expiryTitle}>{plan.expiry}</strong>
+            </div>
+            {plan.expiryStatus && <small className={plan.expiryTone}>{plan.expiryStatus}</small>}
+          </div>
+          <div className="kc-menu-usage" aria-label="本月用量">
+            <div className="kc-menu-meter" title={plan.usageTitle}>
+              {plan.usagePercent !== undefined && <progress className={`kc-usage-progress ${plan.usageTone}`} max={100} value={plan.usagePercent} aria-label="本月已用比例" />}
+              {plan.usagePercent === undefined && <span className={plan.usageTone}>用量暂无数据</span>}
+            </div>
+            {plan.usageStatus && <small className={plan.usageTone}>{plan.usageStatus}</small>}
+          </div>
+          </div>}
           {state.user && <button disabled={busy} onClick={() => { setMenu(false); void run(() => custom.refresh()); }}>更新订阅</button>}
+          <button disabled={busy} onClick={() => { setMenu(false); void run(() => custom.openRoutingSettings()); }}>路由设置</button>
           <button disabled={pending} onClick={() => { void run(async () => { await window.desktop.settings.setOpenAtLogin(!openAtLogin); setOpenAtLogin(!openAtLogin); }); }}>开机启动 {openAtLogin ? "✓" : ""}</button>
           {state.user && <button disabled={busy} onClick={() => { setMenu(false); void run(() => custom.logout()); }}>退出登录</button>}
           <button onClick={() => { void run(() => window.desktop.app.quit()); }}>退出程序</button>
@@ -77,6 +95,7 @@ export function CompactApp() {
     </header>
     {(error || state.error) && <div className="kc-message kc-error" role="alert">{error || state.error}</div>}
     <Toast notice={state.notice} updated={state.lastUpdated} />
+    {state.routingPending && <div className="kc-message" role="status">当前：{modeLabel(state.activeRoutingMode!)}。路由设置已修改，下次连接生效（{modeLabel(state.routing.mode)}）。</div>}
     {!state.user ? <form className="kc-login" onSubmit={login}>
       <label>账号<input autoComplete="username" value={account} maxLength={512} onChange={(event) => setAccount(event.target.value)} placeholder="请输入账号" required disabled={busy} /></label>
       <label>密码<input type="password" autoComplete="current-password" value={password} maxLength={4096} onChange={(event) => setPassword(event.target.value)} placeholder="请输入密码" required disabled={busy} /></label>
@@ -93,10 +112,6 @@ export function CompactApp() {
         <NodePicker nodes={state.nodes} selected={state.selected} disabled={busy} onSelect={(tag) => run(() => custom.select(tag))} />
       </div>
       <div className="kc-traffic"><div><span>↓ 下载</span><strong>{rate(state.download)}</strong></div><div><span>↑ 上传</span><strong>{rate(state.upload)}</strong></div></div>
-      <div className="kc-plan" aria-label="套餐信息">
-        <div className={plan.usageTone} title={plan.usageTitle}><span>本月已用</span><strong>{plan.usage}</strong>{plan.usageStatus && <small>{plan.usageStatus}</small>}</div>
-        <div className={plan.expiryTone} title={plan.expiryTitle}><span>套餐到期</span><strong>{plan.expiry}</strong>{plan.expiryStatus && <small>{plan.expiryStatus}</small>}</div>
-      </div>
     </section>}
   </main>;
 }
