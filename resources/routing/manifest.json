@@ -1,0 +1,18 @@
+[
+  {
+    "file": "geosite-cn.json",
+    "sha256": "da529173493cccae3cb195ba16534d743e8bb38a0de1ff28899ab1f6859ee981",
+    "commit": "58f3e79fdf71c4a87af80e9de87888c6a91b20a4",
+    "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/58f3e79fdf71c4a87af80e9de87888c6a91b20a4/geosite-cn.srs",
+    "sourceFile": "geosite-cn.srs",
+    "sourceSha256": "ef8d2b4bec72c034f1c44beb56ba9fdaff014b42ff3a8355d34a09b9966f83fe"
+  },
+  {
+    "file": "geoip-cn.json",
+    "sha256": "a725b6cb27689814fb46c6a79d2756bf47e0128b3fd8ed511b126bcb7b5f4d05",
+    "commit": "eb32cd6ed4a16fcb3bf9a36ccebf28e45716ae84",
+    "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/eb32cd6ed4a16fcb3bf9a36ccebf28e45716ae84/geoip-cn.srs",
+    "sourceFile": "geoip-cn.srs",
+    "sourceSha256": "81ada5cafd9d831adc48776f29cdfe55c9713d9287caeef9de925ef30f66cce4"
+  }
+]

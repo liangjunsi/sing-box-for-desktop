@@ -9,6 +9,10 @@ async function call<T>(method: string, ...args: unknown[]): Promise<T> {
   return result.value as T;
 }
 export const customBridge: CustomBridge = {
+  openRoutingSettings: () => call("openRoutingSettings"),
+  setRoutingMode: mode => call("setRoutingMode", mode),
+  saveRoutingRule: rule => call("saveRoutingRule", rule),
+  deleteRoutingRule: id => call("deleteRoutingRule", id),
   resize: (height) => call("resize", height),
   state: () => call("state"), login: (account, password, remember) => call("login", account, password, remember),
   logout: () => call("logout"), refresh: () => call("refresh"), connect: () => call("connect"), disconnect: () => call("disconnect"),

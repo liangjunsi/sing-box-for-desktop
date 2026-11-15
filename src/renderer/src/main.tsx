@@ -8,6 +8,7 @@ import { createRoot } from "react-dom/client";
 
 import { App } from "@dashboard/App";
 import { CompactApp } from "../../custom/desktop/CompactApp";
+import { RoutingSettingsApp } from "../../custom/desktop/RoutingSettingsApp";
 import { Toast } from "../../custom/desktop/Toast";
 import { configurePreferenceStorage } from "@dashboard/lib/storage";
 import "@dashboard/styles/globals.css";
@@ -91,14 +92,15 @@ function watchTitleBarOverlay() {
 }
 
 const compact = new URLSearchParams(location.search).has("compact");
-if (!compact) watchTitleBarOverlay();
+const routingSettings = new URLSearchParams(location.search).has("routingSettings");
+if (!compact && !routingSettings) watchTitleBarOverlay();
 
 const desktop = createDesktopHost();
 configurePreferenceStorage(desktop.preferences);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {compact ? <CompactApp /> : <App desktop={desktop} />}
-    {!compact && <Toast />}
+    {routingSettings ? <RoutingSettingsApp /> : compact ? <CompactApp /> : <App desktop={desktop} />}
+    {!compact && !routingSettings && <Toast />}
   </StrictMode>,
 );

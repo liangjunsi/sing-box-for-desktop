@@ -29,6 +29,8 @@ electronLanguages:
   - fa
   - ru
 extraResources:
+  - from: resources/routing
+    to: routing
   - from: LICENSE
     to: licenses/desktop-LICENSE.txt
   - from: dashboard/LICENSE

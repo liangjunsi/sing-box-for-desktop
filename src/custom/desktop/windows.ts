@@ -13,6 +13,35 @@ import { windowIconPath } from "../../main/resources";
 const compactState = new Preference<MainWindowState | undefined>("custom_compact_window_state", undefined, parseMainWindowState);
 let advanced: BrowserWindow | null = null;
 let compact: BrowserWindow | null = null;
+let routingSettings: BrowserWindow | null = null;
+
+export function openRoutingSettingsWindow(): BrowserWindow {
+  if (routingSettings && !routingSettings.isDestroyed()) {
+    if (routingSettings.isMinimized()) routingSettings.restore();
+    routingSettings.show(); routingSettings.focus(); return routingSettings;
+  }
+  const area = screen.getDisplayMatching(compact?.getBounds() ?? screen.getPrimaryDisplay().workArea).workArea;
+  const window = new BrowserWindow({
+    width: Math.min(520, area.width), height: Math.min(720, area.height),
+    minWidth: Math.min(320, area.width), minHeight: Math.min(360, area.height),
+    x: area.x + Math.max(0, Math.round((area.width - 520) / 2)),
+    y: area.y + Math.max(0, Math.round((area.height - 720) / 2)),
+    show: false, title: "Kukuhou · 路由设置", backgroundColor: "#f5f7fb", icon: windowIconPath(),
+    minimizable: false, maximizable: false,
+    webPreferences: { preload: join(import.meta.dirname, "../preload/index.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false },
+  });
+  routingSettings = window; window.setMenu(null);
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("will-navigate", (event, url) => { if (url !== window.webContents.getURL()) event.preventDefault(); });
+  window.once("closed", () => { if (routingSettings === window) routingSettings = null; });
+  window.once("ready-to-show", () => window.show());
+  const renderer = developmentRendererURL();
+  const url = renderer ? new URL(renderer) : null;
+  if (url) url.searchParams.set("routingSettings", "1");
+  const loading = url ? window.loadURL(url.toString()) : window.loadFile(join(import.meta.dirname, "../renderer/index.html"), { query: { routingSettings: "1" } });
+  void loading.catch(() => window.destroy());
+  return window;
+}
 let quitting = false;
 export function isAdvancedWindow(window: BrowserWindow): boolean { return advanced === window; }
 app.on("before-quit", (event) => {
